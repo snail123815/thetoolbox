@@ -59,8 +59,7 @@ def calHash(*args) -> str:
     haRaw = ''.encode()
     for arg in args:
         if isinstance(arg, str):
-            if os.path.isfile(os.path.realpath(arg)):
-                # Less dangerous if transformed to real path.
+            if os.path.isfile(arg):
                 # Do not think about making a dir recognisable.
                 with open(arg, 'rb') as f:
                     haRaw += md5(f.read()).digest()
@@ -76,6 +75,8 @@ def calHash(*args) -> str:
             haRaw += arg.components_.tobytes()
         elif isinstance(arg, PLS):
             haRaw += arg.x_loadings_.tobytes()
+        elif isinstance(arg, bytes):
+            haRaw += arg
         else:
             haRaw += str(arg).encode()
     return md5(haRaw).hexdigest()[:6]
