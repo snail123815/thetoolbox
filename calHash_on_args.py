@@ -11,6 +11,7 @@
 ################################################################
 
 import json
+import os
 from collections import OrderedDict
 from hashlib import md5
 
@@ -55,23 +56,29 @@ def calHash(*args) -> str:
         ).digest()
         return ha
 
-    hastr = ''.encode()
+    haRaw = ''.encode()
     for arg in args:
         if isinstance(arg, str):
-            hastr += arg.encode()
+            if os.path.isfile(os.path.realpath(arg)):
+                # Less dangerous if transformed to real path.
+                # Do not think about making a dir recognisable.
+                with open(arg, 'rb') as f:
+                    haRaw += md5(f.read()).digest()
+            else:
+                haRaw += arg.encode()
         elif isinstance(arg, set):
-            hastr += str(sorted(list())).encode()
+            haRaw += str(sorted(list())).encode()
         elif isinstance(arg, dict):
-            hastr += hashDict(arg)
+            haRaw += hashDict(arg)
         elif isinstance(arg, pd.core.frame.DataFrame) or isinstance(arg, pd.core.series.Series):
-            hastr += md5(arg.to_json().encode()).digest()
+            haRaw += md5(arg.to_json().encode()).digest()
         elif isinstance(arg, PCA):
-            hastr += arg.components_.tobytes()
+            haRaw += arg.components_.tobytes()
         elif isinstance(arg, PLS):
-            hastr += arg.x_loadings_.tobytes()
+            haRaw += arg.x_loadings_.tobytes()
         else:
-            hastr += str(arg).encode()
-    return md5(hastr).hexdigest()[:6]
+            haRaw += str(arg).encode()
+    return md5(haRaw).hexdigest()[:6]
 
 
 # TEST
