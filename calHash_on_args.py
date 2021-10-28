@@ -84,6 +84,11 @@ def calHash(*args) -> str:
 # TEST
 if __name__=="__main__":
     import numpy as np
+    import warnings
+    warnings.filterwarnings("ignore")
+    tmpfile = 'abc.tmp'
+    with open(tmpfile, 'wb') as tf:
+        tf.write('iviviv'.encode())
     a = pd.DataFrame(dict(a=[1,2],b=[3,4]), index=[1,2])
     b = dict(x='iv', y='83', z=dict(i=0, u=5, k=dict(kj='kj', hs='qf')))
     c = 'avb'
@@ -92,8 +97,8 @@ if __name__=="__main__":
     e.fit(np.linspace(1,100,50).reshape(-1,2).T, [[1],[1.5]])
     f = PCA()
     f.fit(np.linspace(4,5,100).reshape(-1,5))
-    ha = calHash(a,b,c,d,e,f) 
-    correctHa = 'b41ecd'
+    ha = calHash(a,b,c,d,e,f, tmpfile) 
+    correctHa = '89c28a'
     if ha == correctHa:
         print("Test OK")
     else:
@@ -104,3 +109,6 @@ if __name__=="__main__":
         print(f'd now {calHash(d)} - previous c4ca42')
         print(f'e now {calHash(e)} - previous 8889c7')
         print(f'f now {calHash(f)} - previous 5473de')
+        print(f'tmpfile now {calHash(tmpfile)} - previous')
+
+    os.remove(tmpfile)
