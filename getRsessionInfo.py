@@ -9,7 +9,7 @@ def printToString(*args, **kwargs):
     return contents
 
 
-def writeRSession(fileName, logger=None):
+def writeRSessionInfo(fileName, logger=None):
     if isinstance(logger, type(None)):
         logger = logging.getLogger()
     with open(fileName, 'w') as fh:
