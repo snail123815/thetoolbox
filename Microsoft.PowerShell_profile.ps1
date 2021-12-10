@@ -49,7 +49,8 @@ function tarpigz ($path)
     # not be recognised by tar in linux probably because the whole thing is not
     # passed to bash but just as an argument.
     $target = $path + '.tar.gz'
-    wsl -d ubuntu-wsl1 tar cvf $target --use-compress-program=pigz $path
-    # do not pipe because that will pipe back to powershell
+    $cmd = "wsl -d ubuntu-wsl1 tar cvf `"$target`" --use-compress-program=pigz `"$path`""
+    Write-Output $cmd
+    Invoke-Expression $cmd
     # maybe try to use bash and "tar ..." and see if that can parse the pip correctly
 }
