@@ -16,17 +16,25 @@ function rsyncps([string]$from, [string]$to, [string]$wsl='ubuntu-wsl1')
     # J: /mnt/j/ drvfs defaults 0 0
     # P: /mnt/p/ drvfs defaults 0 0
     # this should be permenent if your windows version >= 17093
+    $cmd = "wsl -d $wsl "
     if ($from -match '^[a-z]\:[\\\/]') {
         $from = $from -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
     if ($to -match '^[a-z]\:[\\\/]') {
+        $netdrives = (net use | select-object -skip 3) -replace '\s{2,}', ' ' -replace '-', ''
+                     | ConvertFrom-Csv -delimiter ' '
+                     | Where-Object {$_.Local -like '*:'}
+        # sudo is needed if target location is a network location (mounted to windows)
+        if ($to.Substring(0,2) -in $netdrives.Local) {
+            $cmd += 'sudo '
+        } 
         $to = $to -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
     $from = $from -replace '\\', "/"
     $from = $from -replace '^\.\/',""
     $to = $to -replace '\\', "/"
     $to = $to -replace '^\.\/',""
-    $cmd = "wsl -d $wsl rsync -a --info=progress2 `"$from`" `"$to`""
+    $cmd += "rsync -a --info=progress2 `"$from`" `"$to`""
     Write-Output $cmd
     Invoke-Expression $cmd
 }
