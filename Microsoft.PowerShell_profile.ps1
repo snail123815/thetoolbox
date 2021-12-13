@@ -21,13 +21,13 @@ function rsyncps([string]$from, [string]$to, [string]$wsl='ubuntu-wsl1')
         $from = $from -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
     if ($to -match '^[a-z]\:[\\\/]') {
-        $netdrives = (net use | select-object -skip 3) -replace '\s{2,}', ' ' -replace '-', ''
+        $netdrives = ((net use | select-object -skip 3) -replace '\s{2,}', ' ' -replace '-', ''
                      | ConvertFrom-Csv -delimiter ' '
-                     | Where-Object {$_.Local -like '*:'}
+                     | Where-Object {$_.Local -like '*:'}).Local
         # sudo is needed if target location is a network location (mounted to windows)
-        if ($to.Substring(0,2) -in $netdrives.Local) {
-            $cmd += 'sudo '
-        } 
+        # another solution to get netdrives neatly:
+        # $netdrives = (Get-CimInstance -Class Win32_LogicalDisk | Where-Object {$_.DriveType -eq 4}).DeviceID
+        if ($to.Substring(0,2) -in $netdrives) { $cmd += 'sudo ' }
         $to = $to -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
     $from = $from -replace '\\', "/"
