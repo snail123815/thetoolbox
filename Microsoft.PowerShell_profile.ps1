@@ -2,8 +2,15 @@ New-Alias ll Get-ChildItem
 
 Remove-Alias r # for removing the system R and use only conda R if that is the purpose
 
-function rsyncps([string]$from, [string]$to, [string]$wsl='ubuntu-wsl1')
-{
+function rsyncps() {
+    param(
+        [Parameter(Mandatory=$False)][string]$wsl='ubuntu-wsl1', # wsl distribution name
+        [Parameter(
+            Mandatory=$True,
+            Position=1, # To make sure wsl is only set when specifying -wsl
+            ValueFromRemainingArguments=$True
+        )][string[]]$paths
+    )
     # Purpose is to have a restartable copy function. robocopy can do it but the
     # transfer behaviour is very weird. Without specifying -MT > 32, it won't use full
     # bandwidth. Also, if you specify -MT in any number, the disk will be fully occupied
@@ -17,24 +24,32 @@ function rsyncps([string]$from, [string]$to, [string]$wsl='ubuntu-wsl1')
     # P: /mnt/p/ drvfs defaults 0 0
     # this should be permenent if your windows version >= 17093
     $cmd = "wsl -d $wsl "
-    if ($from -match '^[a-z]\:[\\\/]') {
-        $from = $from -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
+    $froms = $paths[0..($paths.Length - 2)]
+    $to = $paths[-1]
+    for ($i = 0; $i -le ($froms.length-1); $i += 1) {
+        if ($froms[$i] -match '^[a-z]\:[\\\/]') {
+            $froms[$i] = $froms[$i] -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower() `
+
+        }
+        $froms[$i] = $froms[$i] -replace '\\', "/" -replace '^\.\/',""
     }
     if ($to -match '^[a-z]\:[\\\/]') {
-        $netdrives = ((net use | select-object -skip 3) -replace '\s{2,}', ' ' -replace '-', ''
-                     | ConvertFrom-Csv -delimiter ' '
-                     | Where-Object {$_.Local -like '*:'}).Local
+        #$netdrives = 'J:', 'K:'
+        #$netdrives = ((net use | select-object -skip 3) -replace '\s{2,}', ' ' -replace '-', ''
+        #             | ConvertFrom-Csv -delimiter ' '
+        #             | Where-Object {$_.Local -like '*:'}).Local
         # sudo is needed if target location is a network location (mounted to windows)
-        # another solution to get netdrives neatly:
-        # $netdrives = (Get-CimInstance -Class Win32_LogicalDisk | Where-Object {$_.DriveType -eq 4}).DeviceID
+        # another solution to get netdrives neatly but lags a bit:
+        $netdrives = (Get-CimInstance -Class Win32_LogicalDisk | Where-Object {$_.DriveType -eq 4}).DeviceID
         if ($to.Substring(0,2) -in $netdrives) { $cmd += 'sudo ' }
         $to = $to -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
-    $from = $from -replace '\\', "/"
-    $from = $from -replace '^\.\/',""
-    $to = $to -replace '\\', "/"
-    $to = $to -replace '^\.\/',""
-    $cmd += "rsync -a --info=progress2 `"$from`" `"$to`""
+    $to = $to -replace '\\', "/" -replace '^\.\/',""
+    $cmd += "rsync -a --info=progress2"
+    foreach ($from in $froms) {
+        $cmd += " `"$from`""
+    }
+    $cmd += " `"$to`""
     Write-Output $cmd
     Invoke-Expression $cmd
 }
