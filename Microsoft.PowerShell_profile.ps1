@@ -15,11 +15,17 @@ function rsyncps() {
     # transfer behaviour is very weird. Without specifying -MT > 32, it won't use full
     # bandwidth. Also, if you specify -MT in any number, the disk will be fully occupied
     # by it. Which makes no sense.
+    # rysnc is better in utilising all bandwidth at all times. However it is not perfect.
+    # For some reason it uses bandwidth alternatively with
+    # 'Windows Defender Advanced Threat Protection Service', occupancy is half-half.
+    # Albeit that, disk read and network sending looks fine most of the time, and speed is
+    # up-to-expectation: Showing speed ~12 MB/s + gaps in transferring buffer ~= 8.4 MB/s on a
+    # 100 Mbps (12.5 MB/s max) band. (good enough for both transfer and check)
 
     # pass in a wsl version 1 to ensure efficiency (probably don't matter)
-    # you need to mount all accessible drives in /mnt/ before using this function, or 
+    # you need to mount all accessible drives in /mnt/ before using this function, or
     # we won't find target/source location
-    # First make dir for mount point, then add lines in /etc/fstab using sudo
+    # First make dirs for mount point, then add lines in /etc/fstab using sudo
     # J: /mnt/j/ drvfs defaults 0 0
     # P: /mnt/p/ drvfs defaults 0 0
     # this should be permenent if your windows version >= 17093
