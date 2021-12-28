@@ -28,7 +28,7 @@ FRACTION_COUNTING=0
 LOOSE_PE_COUNTING=0
 
 SCRATCH=/scratchdata/${SLURM_JOB_USER}/${SLURM_JOB_ID} # fresh for every job
-SCRIPTS_DIR="/home/duc/toolbox-du/RNA-Seq/"
+SCRIPTS_DIR="/home/duc/toolbox-du/RNA-Seq"
 CONDA_ENV="/data/projects/pi-vriesendorpb/tools/anaconda3/envs/RNASeqBact"
 CWD=$(pwd)
 TEMP_RAW=$SCRATCH/rawreads
@@ -39,7 +39,7 @@ TEMP_COUNT=$SCRATCH/countTable
 CMD_ALIGN="python3 $SCRIPTS_DIR/Align_RNASeq_bowtie2.py"
 CMD_ALIGN+=" --ncpu "$NCPU              # number of cpu to use
 CMD_ALIGN+=" --raw "$TEMP_RAW                # path(s) to raw data
-CMD_ALIGN+=" --out "$OUT_ALIGN          # path to output alignment
+CMD_ALIGN+=" --out "$TEMP_ALIGN          # path to output alignment
 CMD_ALIGN+=" --genome "$GENOME          # path to genome file(s), also supports indexed genome (*.bt2)
 if [ $PAIREND = 1 ]; then
     CMD_ALIGN+=" --isPe"
@@ -91,7 +91,9 @@ echo "[$SHELL] #### Starting Job"
 echo "[$SHELL] This is $SLURM_JOB_USER, job ID $SLURM_JOB_ID"
 echo "[$SHELL] Node scratch: ""$SCRATCH"
 echo "[$SHELL] Activate environment at $CONDA_ENV"
+source /home/duc/.bashrc
 micromamba activate $CONDA_ENV
+echo "[$SHELL] Current environment python: $(which python)"
 START_TIME=$(date +%s)
 echo "[$SHELL] Started at: $(date)"
 echo "[$SHELL] CWD: ""$CWD"

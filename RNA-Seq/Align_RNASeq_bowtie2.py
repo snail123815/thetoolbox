@@ -91,6 +91,7 @@ def main():
             samples = list(set(f[:-len(peSfx[0])] for f in fns))
         else:
             samples = fns
+        samples.sort()
 
 
     sampleFileDict = {}
@@ -105,6 +106,7 @@ def main():
 
     totalTs = time.time()
     assert len(samples) > 0
+    logging.info(f'Samples to process: {samples}')
     for i, s in enumerate(samples):
         ts = time.time()
         logging.info(f'Processing {i+1}/{len(samples)}: {s}')
