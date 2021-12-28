@@ -135,13 +135,13 @@ def main():
                 # set togeter with -P)
         logging.info(' '.join(args))
         res = run(args, capture_output=True)
-        gffFile.close()
         if res.returncode != 0:
             logging.info(res.stdout.decode())
             logging.info(res.stderr.decode())
             raise Exception
         logging.info(res.stderr.decode())
         logging.info(f'Finished in {diffTime(ts)}\n')
+    gffFile.close()
     logging.info(f'All done, time elapsed {diffTime(finalTs)}')
     logging.info('='*20 + getTime() + '='*20)
 
