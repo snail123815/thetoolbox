@@ -45,13 +45,20 @@ def main():
     # keep only selected features
     seqs = []
     for seq in SeqIO.parse(gbk, 'genbank'):
-        newSeq = SeqRecord('')
+        newSeq = SeqRecord('', id=seq.id)
         for feat in seq.features:
             if feat.type in targetFeature.split(',') and groupFactor in feat.qualifiers:
-                newFeat = SeqFeatures()
-                newFeat.location = feat.location
+                newFeat = SeqFeature(
+                    location=feat.location,
+                    type=feat.type,
+                    id=feat.id,
+                )
                 newFeat.qualifiers[groupFactor] = feat.qualifiers[groupFactor]
                 newSeq.features.append(newFeat)
+        if len(newSeq.features) == 0:
+            errmsg =f'Did not find any feature with type {targetFeature} and have qualifier {groupFactor}.' 
+            logging.error(errmsg)
+            raise ValueError(errmsg)
         seqs.append(newSeq)
 
     GFF.write(seqs, gffFile)
