@@ -5,6 +5,8 @@ import time
 import argparse
 import logging
 from Bio import SeqIO
+from Bio.SeqRecord import SeqRecord
+from Bio.SeqFeature import SeqFeature
 from BCBio import GFF
 
 
@@ -40,7 +42,19 @@ def main():
 
     # convert gbk to gff
     gffFile = NamedTemporaryFile('w+')
-    GFF.write(SeqIO.parse(gbk,'genbank'), gffFile)
+    # keep only selected features
+    seqs = []
+    for seq in SeqIO.parse(gbk, 'genbank'):
+        newSeq = SeqRecord('')
+        for feat in seq.features:
+            if feat.type in targetFeature.split(',') and groupFactor in feat.qualifiers:
+                newFeat = SeqFeatures()
+                newFeat.location = feat.location
+                newFeat.qualifiers[groupFactor] = feat.qualifiers[groupFactor]
+                newSeq.features.append(newFeat)
+        seqs.append(newSeq)
+
+    GFF.write(seqs, gffFile)
     gffFile.seek(0)
     gff = gffFile.name
     logging.info('Head of gff file')
