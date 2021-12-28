@@ -35,13 +35,18 @@ def main():
     fractionCounting = args.fractionCounting
     peStrict = not args.peLoose
 
-    logging.basicConfig(filename='!featureCounts.log', level=logging.DEBUG)
+    os.makedirs(out, exist_ok=True)
+    logging.basicConfig(filename=os.path.join(out,'!featureCounts.log'), level=logging.DEBUG)
 
     # convert gbk to gff
     gffFile = NamedTemporaryFile('w+')
     GFF.write(SeqIO.parse(gbk,'genbank'), gffFile)
     gffFile.seek(0)
     gff = gffFile.name
+    logging.info('Head of gff file')
+    for i in range(12):
+        logging.info(gffFile.readline())
+    logging.info('####### End head of gff ########')
 
     finalTs = time.time()
     if not os.path.isdir(out):
@@ -60,6 +65,7 @@ def main():
             'featureCounts',
             '-T', ncpu,
             '-a', gff,
+            '-F', 'GTF',
             '-t', targetFeature,
             '-g', groupFactor,
             '--minOverlap', '20', # Minimum number of overlapping bases in a read that is

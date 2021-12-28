@@ -14,8 +14,8 @@ RAW="/data/duc/RNA-SeqProj/rawreads"
 OUT_ALIGN="/data/duc/RNA-SeqProj/aligned"
 OUT_COUNT="/data/duc/RNA-SeqProj/countTable"
 GENOME="/data/duc/RNA-SeqProj/genome.gbk" # genbank file with annotation required
-TARGET_FEATURE="locus_tag"
-GROUP_FEATURE=$TARGET_FEATURE
+TARGET_FEATURE="gene"
+GROUP_FEATURE="locus_tag"
 
 # Pair-end settings:
 PAIREND=1
