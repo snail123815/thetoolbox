@@ -1,29 +1,29 @@
 #!/bin/bash
-#SBATCH --job-name=prok_
-#SBATCH --output=prokka_.out
-#SBATCH  --error=prokka_.err
+#SBATCH --job-name=prok_MBT
+#SBATCH --output=prokka_MBT.out
+#SBATCH  --error=prokka_MBT.err
 #SBATCH --ntasks=8
 #SBATCH --mem=10G
-#SBATCH --partition=testing
-#SBATCH --time=00:19:00
+#SBATCH --partition=cpu-short
+#SBATCH --time=01:00:00
 #SBATCH --mail-user="c.du@biology.leidenuniv.nl"
 #SBATCH --mail-type="ALL"
 
 NCPU="8"
 
-TARGET="assembly.fasta"
-GENUS="genus"
+TARGET="MBT.fa"
+GENUS="actinobacteria"
 SPECIES="sp."
-STRAIN="MBT00"
-LOCUSTAG="LOCUS_TAG"
-PREFIX="prokka_" # Filename output prefix [auto] (default '')
+STRAIN="MBT"
+LOCUSTAG="LOCUS_TAG_MBT"
+PREFIX="prokka_MBT" # Filename output prefix [auto] (default '')
 OUTPUT_NAME=$PREFIX"_$STRAIN""_$LOCUSTAG"_$(date "+%Y%m%d_%H%M%S")
 
 GRAM="POS"
 CENTRE="MBT"
 GCODE="11"
 
-CONDA_ENV="/data/projects/pi-vriesendorpb/tools/anaconda3/envs/quasan"
+CONDA_ENV="/data/projects/pi-vriesendorpb/tools/anaconda3/envs/prokka_with_signalp"
 source /home/duc/.bashrc
 
 SCRATCH=/scratchdata/${SLURM_JOB_USER}/${SLURM_JOB_ID} # fresh for every job
@@ -43,7 +43,7 @@ CMD+=" --gram "$GRAM
 CMD+=" --prefix "$PREFIX
 CMD+=" --gcode "$GCODE
 CMD+=" --cpu "$NCPU
-CMD+=$TARGET
+CMD+=" "$TARGET
 ##################################################
 
 # Adding [$SHELL] will give distinction between echo and script output
