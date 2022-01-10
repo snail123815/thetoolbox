@@ -30,6 +30,7 @@ function rsyncps() {
     # P: /mnt/p/ drvfs defaults 0 0
     # this should be permenent if your windows version >= 17093
     $cmd = "wsl -d $wsl "
+    $rsync_basecmd = "rsync -ahh --info=progress2 "
     $froms = $paths[0..($paths.Length - 2)]
     $to = $paths[-1]
     for ($i = 0; $i -le ($froms.length-1); $i += 1) {
@@ -47,15 +48,27 @@ function rsyncps() {
         # sudo is needed if target location is a network location (mounted to windows)
         # another solution to get netdrives neatly but lags a bit:
         $netdrives = (Get-CimInstance -Class Win32_LogicalDisk | Where-Object {$_.DriveType -eq 4}).DeviceID
-        if ($to.Substring(0,2) -in $netdrives) { $cmd += 'sudo ' }
+        if ($to.Substring(0,2) -in $netdrives) {
+            $cmd += "sudo "
+            $wslhome = $(wsl -d $wsl "cd ~ && pwd -P".split())
+            $rsync_basecmd += "-e `"ssh -F $wslhome/.ssh/config`" "
+            # Adding `ssh -F` is necessary when `sudo` is used. The default
+            # config of super user will be used and your configured host and
+            # key file will not be found in the super user ssh dir. Specifying which
+            # config file to use will solve the problem.
+            # Note: to change all `~` to reall home directory eg. `/home/duc`.
+            # Note: the $HOME cannot be used because it will expand with
+            # powershell. If you use single quote to prevent its expension from here,
+            # it will expand later in `Invoke-Expression`
+        }
         $to = $to -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
     $to = $to -replace '\\', "/" -replace '^\.\/',""
-    $cmd += "rsync -a --info=progress2"
+    $cmd += $rsync_basecmd
     foreach ($from in $froms) {
-        $cmd += " `"$from`""
+        $cmd += "`"$from`" "
     }
-    $cmd += " `"$to`""
+    $cmd += "`"$to`" "
     Write-Output $cmd
     Invoke-Expression $cmd
 }
