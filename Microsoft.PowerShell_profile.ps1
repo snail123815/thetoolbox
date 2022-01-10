@@ -64,6 +64,7 @@ function rsyncps() {
         $to = $to -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
     $to = $to -replace '\\', "/" -replace '^\.\/',""
+    if ($to -eq "") { $to = './' }
     $cmd += $rsync_basecmd
     foreach ($from in $froms) {
         $cmd += "`"$from`" "
