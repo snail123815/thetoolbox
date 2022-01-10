@@ -52,7 +52,7 @@ echo "[$SHELL] #### Starting Job"
 echo "[$SHELL] This is $SLURM_JOB_USER, job ID $SLURM_JOB_ID"
 echo "[$SHELL] Node scratch: ""$SCRATCH"
 # Enter the designed environment
-echo "[$SHELL] Activate AntiSMASH at $CONDA_ENV"
+echo "[$SHELL] Activate prokka at $CONDA_ENV"
 micromamba activate $CONDA_ENV
 # Get start time
 START_TIME=$(date +%s)
