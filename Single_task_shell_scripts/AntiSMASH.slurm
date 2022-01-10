@@ -1,10 +1,10 @@
 #!/bin/bash
 #SBATCH   --job-name=antsm_
-#SBATCH --output=antismash_out
-#SBATCH  --error=antismash_err
+#SBATCH --output=antismash_.out
+#SBATCH  --error=antismash_.err
 #SBATCH --ntasks=8
-#SBATCH --mem=10G
-#SBATCH --partition=testing
+#SBATCH --mem=60G
+#SBATCH --partition=cpu-short
 #SBATCH --time=00:59:00
 #SBATCH --mail-user="c.du@biology.leidenuniv.nl"
 #SBATCH --mail-type="ALL"
@@ -23,6 +23,7 @@ SCRATCH=/scratchdata/${SLURM_JOB_USER}/${SLURM_JOB_ID} # fresh for every job
 TEMPRES=$SCRATCH/$OUTPUT_NAME
 CWD=$(pwd)
 OUTPUTDIR=$CWD/$OUTPUT_NAME
+TARGET=$(realpath $TARGET)
 
 ########################################################
 # ANTISMASH command build
@@ -53,8 +54,10 @@ fi
 
 CMD+=" --output-dir "$TEMPRES
 CMD+=" --html-title "$TITLE
-CMD+=" --html-description "$DESCRIPTION
-CMD+=" "$TARGET
+if [ "$DESCRIPTION" != "" ]; then
+    CMD+=" --html-description "$DESCRIPTION
+fi
+CMD+=" "$(basename $TARGET)
 ########################################################
 
 # Adding [$SHELL] will give distinction between echo and script output
@@ -77,7 +80,7 @@ export LC_ALL=en_US.UTF-8
 
 # Start the work
 echo "[$SHELL] Copy target to scratch."
-cp -r "$CWD/$TARGET" "$SCRATCH"
+cp -r "$TARGET" "$SCRATCH"
 echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
 cd "$SCRATCH" || exit
 
