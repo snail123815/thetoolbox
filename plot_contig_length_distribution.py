@@ -10,6 +10,7 @@ args = parser.parse_args()
 fa = args.fasta
 
 title = os.path.basename(fa)
+outputSvg = os.path.splitext(fa)[0]+'.svg'
 
 seqs = list(SeqIO.parse(fa,'fasta'))
 seqs.sort(key=lambda x: len(x), reverse=True)
@@ -49,7 +50,7 @@ while i < 15:
         break
     i += 1
 
-
+fig.savefig(outputSvg)
 plt.show()
 
 
