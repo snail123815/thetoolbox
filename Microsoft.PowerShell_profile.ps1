@@ -63,8 +63,17 @@ function rsyncps() {
         }
         $to = $to -replace '^[a-z]\:[\\\/]', "/mnt/$($Matches[0][0])/".ToLower()
     }
+    
+    # Remove proceeding stuff that will break local path parsing in rsync (unknown bug)
     $to = $to -replace '\\', "/" -replace '^\.\/',""
+    # If any of the target is a local dir, then above replacment is not approperate, add it back.
+    if ($to -eq "") { $to = './'}
+
+    # If any of the pathes are from a server, then add `-z` for compression during transfer
+    if ($froms -match '^\S{2,}\:' -or $to -match '^\S{2,}\:') {$rsync_basecmd += "-z "}
+
     $cmd += $rsync_basecmd
+
     foreach ($from in $froms) {
         $cmd += "`"$from`" "
     }
