@@ -86,7 +86,7 @@ def main():
 
     # samples defined here if not defined
     if isinstance(samples, type(None)):
-        fns = [os.path.split(f)[1][:len(rawExt)] for f in files]
+        fns = [os.path.split(f)[1][:-len(rawExt)] for f in files]
         if isPe:
             samples = list(set(f[:-len(peSfx[0])] for f in fns))
         else:
@@ -216,7 +216,7 @@ def imputePesuffix(rawFiles, rawExt, peSfx=None):
     assert len(rawFiles) > 0
     fns = [f[:-len(rawExt)] for f in rawFiles]
     fns.sort()
-    for i in range(1, 6):
+    for i in range(1, 12):
         s = set(fn[-i:] for fn in fns)
         if len(s) == 2:
             peSfx = list(s)
