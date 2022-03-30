@@ -1,27 +1,29 @@
 #!/bin/bash
-#SBATCH --job-name=pgap_DSM
-#SBATCH   --output=pgap_DSM.out
-#SBATCH    --error=pgap_DSM.err
-#SBATCH --ntasks=8
-#SBATCH --mem=10G
+#SBATCH --job-name=pgJJ1683
+#SBATCH   --output=pgJJ1683.out
+#SBATCH    --error=pgJJ1683.err
+#SBATCH --ntasks=12
+#SBATCH --mem=36G
 #SBATCH --partition=cpu-short
-#SBATCH --time=03:00:00
+#SBATCH --time=03:59:00
 #SBATCH --mail-user="c.du@biology.leidenuniv.nl"
 #SBATCH --mail-type="ALL"
 
 NCPU="8"
 
-TARGET="/data/duc/Kita_annotation/NG71738_reversed00000000_4166.current.fasta"
-GENUS_SPECIES="Kitasatospora"
-STRAIN="DSM 40239"
+TARGET="assembly.fasta"
+GENUS_SPECIES="Acidithiobacillus"
+STRAIN="JJ9999"
 
 COMMENT="Annoted with PGAP on Alice"
-BIOPROJECT="PRJNA353578"
-BIOSAMPLE="SAMN06016489"
-LOCUSTAG="BOQ63"
+BIOPROJECT="PRJNA999999"
+BIOSAMPLE="SAMN99999999"
+LOCUSTAG="TELOTA"
 
-
-OUTPUT_NAME="pgap_with_taxcheck"_$(date "+%Y%m%d_%H%M%S")
+OUTPUT_NAME="pgap_"_$(date "+%Y%m%d_%H%M%S")
+TAXCHECK_ONLY=1
+TAXCHECK=1
+IGNORE_ERRORS=1
 
 TARGETFILE=$(basename $TARGET)
 OUTPUTDIR=$(dirname $TARGET)
@@ -70,7 +72,9 @@ CMD+=" -o "$TEMPRES
 CMD+=" --container-name pgap-container"
 CMD+=" --no-internet"
 CMD+=" -D singularity"
-#CMD+=" --taxcheck"
+if [ "$TAXCHECK_ONLY" -eq "1" ]; then; CMD+=" --taxcheck-only"
+else; if [ "$TAXCHECK" -eq "1" ]; then; CMD+=" --taxcheck"; fi
+if [ "$IGNORE_ERRORS" -eq "1" ]; then; CMD+=" --ignore-all-errors"; fi
 CMD+=" input.yaml"
 ##################################################
 
@@ -100,7 +104,7 @@ echo "[$SHELL] Copy data to scratch (aprox. 4 min)"
 cp -r $PGAP_PATH $SCRATCH
 cp $TARGET $INPUT $SUBMOL $SCRATCH 
 echo "[$SHELL] SCRATCH dir: "
-echo "$(tree -L 1 $SCRATCH)"
+echo "$(ls -al $SCRATCH/)"
 echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
 cd "$SCRATCH" || exit
 
