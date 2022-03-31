@@ -47,364 +47,201 @@ jdk() {
 	/usr/libexec/java_home -V
  }
 
-resizePics() {
-    # resize pictures as arguments
-    # Usage:
-    # resizePics 20% [-c] [resize args] img.jpg img1.jpg img2.jpg ...
-    # -c - clean up after resize. DANGEROUS!
-	local resize=$1
-	shift 1
-
-	local REMOVEORIGINAL=0
-
-	if [ $1 = "-c" ]; then
-		REMOVEORIGINAL=1
-		shift 1
-	fi
-	local moreArgs=()
-	while [ ! -f $1 ]; do
-		moreArgs+=$1
-		shift 1
-	done
-
-	for file in $@; do
-		local name="${file%.*}"
-		local ext="${file##*.}"
-		local newFile="${name}".resize."${ext}"
-		echo magick convert $file -resize $resize ${moreArgs[@]} $newFile
-		magick convert $file -resize $resize ${moreArgs[@]} $newFile
-		if [ $REMOVEORIGINAL = 1 ]; then
-			echo "With -c, the original file $file will be removed, y to continue."
-			#read CONTINUE # for BASH
-			read -q CONTINUE # for zsh
-			echo # for zsh
-			if [ "$CONTINUE" != "y" ]; then
-				return
-			else
-				rm $file
-			fi
-		fi
-	done
-}
-
-resizePicInDir() {
-    # Resize images in a folder
-    # Usage:
-    # resizePicInDir jpg png [-nr] [-c] [resize args] ./target/dir/
-    # source file extension as 1st argument
-	# target file extension as 2nd argument
-    # -nr recursive to subfolders, defaults to NOT recur
-    # -c clean up after resize. DANGEROUS! will remove source file.
-
-    # The actual function for one dir
-	resizeOnedir() {
-        # Usage:
-        # resizeOnedir $REMOVEORIGINAL ./path/
-        # #REMOVEORIGINAL is either 1 or 0
-
-		local RM=$1 # Receive $REMOVEORIGINAL
-		shift 1
-
-        local moreArgs=()
-        while [ ! -d $1 ]; do
-            moreArgs+=$1
-            shift 1
-        done
-
-		# See if file with specified extension exists
-		X=$(find $1 -maxdepth 1 -name "*.$format")
-
-		# $X is just a string, not an array.
-		# Converting it into an array is painful.
-		# Read -a only works with BASH
-		# ${=X} only work in ZSH, but need to change IFS beforehand.
-        # IFS is a dangerous argument. Try to avoid it...
-		
-		if [ ! -z $X ]; then
-			for file in $1/*.$format; do
-				if [ -d $file ]; then
-					continue
-				fi
-				newFile=${file%.*}.resize."$format"
-                CMD = "magick convert $file -resize $resize ${moreArgs[@]} $newFile"
-                eval "$CMD"
-				if [ $RM = 1 ]; then
-					echo rm $file
-					rm $file
-				fi
-			done
-		fi
-	}
-
-    # Now starts the main function
-	local resize=$1
-	shift 1
-	local format=$1
-	shift 1
-	local moreArgs=()
-	local RECURSIVE=0
-	if [ ! $1 = "-nr" ]; then
-		RECURSIVE=1
-		shift 1
-	fi
-	local REMOVEORIGINAL=0
-	if [ $1 = "-c" ]; then
-		REMOVEORIGINAL=1
-		echo "With -c, the original file will be removed, y to continue."
-        if [[ $0 == *'zsh' ]]; then
-            read -q CONTINUE # for zsh
-        else
-            read CONTINUE # for BASH
-        fi
-		echo # new line
-		if [ "$CONTINUE" != "y" ]; then
-			return
-		fi
-		shift 1
-	fi
-	while [ ! -d $1 ]; do
-		moreArgs+=$1
-		shift 1
-	done
-
-	if [ $RECURSIVE = 0 ]; then
-		resizeOnedir $REMOVEORIGINAL ${moreArgs[@]} $1
-	else
-		local OIFS=$IFS
-		local IFS=$'\n' DIRS=($(find "$1" -type d))
-		IFS=$OIFS
-		# Do forget about ZSH/BASH compatibility aaaaaah, also issues with IFS aaaaaah
-		for d in ${DIRS}; do
-			resizeOnedir $REMOVEORIGINAL ${moreArgs[@]} $d
-		done
-	fi
-
-}
-
-# TODO: write a unified function for magick convert and resize
-# ON one file, ON more files, ON one dir, ON multiple dirs
-
-_convertPics() {
-    # including resize and change format
+convertPics() {
     local resize=0
     local reformat=0
+    local sourceExt=0
     local RM=0
+    local args=()
     local moreArgs=()
-    if [ $1 = 'rs' ]; then # resize
-        shift 1
-        resize=1
-        local resizeFactor=$1
-        shift 1
-    fi
-    if [ $1 = 'rf' ]; then # reformat
-        shift 1
-        reformat=1
-        local targetExt=$1
-        shift 1
-    fi
-    if [ $1 = "-c" ]; then
-        echo "With -c, the original file(s) will be removed, y to confirm."
-        echo "Press other keys to ignore, files will not be removed."
-        if [[ $0 == *'zsh' ]]; then
-            read -q CONTINUE # for zsh
-        else
-            read CONTINUE # for BASH, I don't know others...
-        fi
-		echo # new line
-		if [ "$CONTINUE" = "y" ]; then
-            RM=1
-		fi
-        shift 1
-    fi
-	while [ ! -f $1 ]; do
-		moreArgs+=$1
-		shift 1
-	done
+    local showHelp() {
+        cat << EOF
+Usage: convertPics [options] FILE(s)/DIR(s)
+Convert input img file or files in directory into target format.
+
+inkscape will be used to convert .svg files.
+
+Options:
+    Key value:
+    -rf     TARGET_FORMAT_EXTENSION
+            If you want to convert format. Will do "magick convert".
+            Eg. "jpg"; "png"
+    -rs     RESIZE_FACTOR
+            If you want to resize picutre. Will add "-resize RF" in
+            "magick convert" command. Eg. "40%"; "1000"(width); "x1000"(height);
+    -sf     SOURCE_FORMAT_EXTENSION
+            When giving DIR as input, this parameter specifies images of which
+            format will be converted. Mandatory when giving DIR input
+    
+    When converting .svg files:
+    -dpi    DPIvalue
+            Default to 300
+    -t|-trans|-transparent
+            A switch, default is off. When converting to PNG, whether to keep transparency.
+    
+    Other switches:
+    -c      Remove source file
+    -cy     Remove source file without asking
+    -nr     Non-recursive, only valid when passing DIR with sub directories. Default is recursive.
+    -h      Show this help message and exit
+
+    Other unreconised parameters will be passed to inkscape or magick
+
+EOF
+    }
+
+    while [ ! -f $1 ] && [ ! -d $1 ]; do
+        case $1 in
+            -h)
+                showHelp
+                return ;;
+            -rf)
+                reformat=1
+                local targetExt=$2
+                args+=("-rf" "$targetExt")
+                shift 2 ;;
+            -rs)
+                resize=1
+                local resizeFactor=$2
+                args+=("-rs" "$resizeFactor")
+                shift 2 ;;
+            -sf)
+                sourceExt=$2
+                args+=("-sf" "$sourceExt")
+                shift 2 ;;
+            -c)
+                echo "With -c, the original file(s) will be removed, y to confirm."
+                echo "Press other keys to ignore, files will not be removed."
+                if [[ $0 == *'zsh' ]]; then
+                    read -q CONTINUE # for zsh
+                else
+                    read CONTINUE # for BASH, I don't know others...
+                fi
+                echo # new line
+                if [ "$CONTINUE" = "y" ]; then
+                    RM=1
+                    args+="-cy"
+                fi
+                shift 1 ;;
+            -cy)
+                RM=1
+                args+="-cy"
+                shift 1 ;;
+            *)
+                moreArgs+=$1
+                shift 1 ;;
+        esac
+    done
+
 	for file in $@; do
-		local name="${file%.*}"
-		local ext="${file##*.}"
+        if [ -f $file ]; then
+            local name="${file%.*}"
+            local ext="${file##*.}"
+            if [ ! $sourceExt = "$ext" ] && [ ! $sourceExt = 0 ]; then
+                continue
+            fi
 
-        if [ $ext = 'svg' ]; then
-            local CMD=""
-        else
-            local CMD="magick convert"
-            if [[ "${#moreArgs[@]}" > 0 ]]; then
-                CMD+=" ${moreArgs[@]}"
-            fi
-            CMD+=" $file"
-            if [ $resize = 1 ]; then
-                CMD+=" -resize"" $resizeFactor"
-            fi
-            if [ $reformat = 1 ]; then
-                local newFile=${file%.*}.format.$targetExt
+            if [ $ext = 'svg' ]; then
+                local CMD="convertSvg "
+                if [ ! $reformat = 1 ]; then
+                    echo "input svg without reformat will anyway be converted to png"
+                    reformat=1
+                    local targetExt="png"
+                    args+=("-rf" "$targetExt")
+                fi
+
+                if [[ "${#args[@]}" > 0 ]]; then
+                    CMD+=" ${args[@]}"
+                fi
+                if [[ "${#moreArgs[@]}" > 0 ]]; then
+                    CMD+=" ${moreArgs[@]}"
+                fi
+                CMD+=" \"$file\""
             else
-                local newFile=${file%.*}.format.$ext
+                local CMD="magick convert"
+                if [[ "${#moreArgs[@]}" > 0 ]]; then
+                    CMD+=" ${moreArgs[@]}"
+                fi
+                CMD+=" \"$file\""
+
+                local newFile=${file%.*}.$ext
+                if [ $resize = 1 ]; then
+                    CMD+=" -resize"" $resizeFactor"
+                    newFile=${newFile%.*}.resize.$ext
+                fi
+                if [ $reformat = 1 ]; then
+                    if [ $targetExt = $ext ]; then
+                        echo "reformat option error, target extension same as input"
+                        exit 1
+                    fi
+                    newFile=${newFile%.*}.$targetExt
+                fi
+                CMD+=" \"$newFile\""
             fi
-            CMD+=" $newFile"
+
+            if [[ $CMD == "magick"* ]]; then
+                echo $CMD; echo
+            fi
+            eval "$CMD"
+
+            if [ $RM = 1 ]; then
+                rm $file
+            fi
+        elif [ -d $file ]; then
+            if [ $sourceExt = 0 ]; then
+                echo "Please provide \"-sf SOURCE_FORMAT_EXTENSION\" as arguments when giving DIR"
+                return
+            fi
+            local CMD="_convertPicsInDirs ${args[@]} ${moreArgs[@]} \"$file\""
+            #echo $CMD
+            eval "$CMD"
         fi
 
-        echo $CMD
-        eval "$CMD"
-
-        if [ $RM = 1 ]; then
-            rm $file
-        fi
     done
 }
 
-_getAbsFilePath() {
-    # $1 : file path, doesn't matter relative or absolute
-    echo $(cd "$(dirname "$1")" && pwd)/$(basename "$1")
-}
-f
-_convertSvgPng() {
+
+convertSvg() {
     local inkscapePath="/usr/local/bin/inkscape"
-
-    # default values
     local dpi=300
-    local quality=90
-    # $1 : absolute filepath
-    if [[ ! $#=2 ]]; then
-        echo "Exactly 2 arguments allowed for convertSvgPng()"
-        exit 1
+    local targetExt="png"
+    local whiteBg=1
+    local moreArgs=()
+    
+    while [ ! -f $1 ]; do
+        case $1 in
+            -dpi)
+                dpi=$2
+                shift 2 ;;
+            -rf) # reformat
+                targetExt=$2
+                shift 2 ;;
+            -transparent | -trans | -t)
+                whiteBg=0
+                shift 1 ;;
+            -sf) # ignore
+                shift 2 ;;
+            *)
+                moreArgs+=$1
+                shift 1 ;;
+        esac
+    done
+
+    local svgPath=$(_getAbsFilePath "$1")
+    local pngPath="${svgPath%.*}.png"
+
+    local CMD="$inkscapePath -o \"$pngPath\" -d $dpi -C"
+    if [ $whiteBg = 1 ]; then
+        CMD+=" -b white"
     fi
-    local svgPath=$1
-    pngPath="${svgPath%.*}.png"
-    local CMD="$inkscapePath -o \"$pngPath\" -d $dpi -C -b white -y 1 \"$svgPath\""
-    echo $CMD; echo
+    CMD+=" \"$svgPath\""
+    #echo $CMD; echo
     eval "$CMD" # eval needs double quotes to work properly with such string
-}
-
-convertPngJpg() {
-    # $1 : png filepath
-    echo; echo "--------------------------------"; echo
-    local CMD="magick \"$1\" -quality $quality \"${1%.*}.jpg\" && rm \"$1\""
-    echo $CMD; echo
-    eval "$CMD"
-}
-
-convertSvgPdf() {
-    # $1 : absolute filepath
-    # inkscape0.92 seems to take only absolute path
-    # don't know about version 1.0, doesn't hurt
-    if [[ ! $#=2 ]]; then
-        echo "Exactly 2 arguments allowed for convertSvgPng()"
-        exit 1
-    fi
-    local svgPath=$1
-    abspdf="${svgPath%.*}.pdf"
-    if [[ ${version} = 0.9 ]]; then
-        # for the propose of eval double quotes, the quotes needs to be escaped nicely
-        local CMD="$inkscape0_9 -z -f \"$svgPath\" -A \"$abspdf\" --export-text-to-path --export-ignore-filters -C -b white"
-    else
-        local CMD="$inkscapePath -o \"$abspdf\" -d $dpi -C -b white -y 1 --export-text-to-path --export-ignore-filters \"$svgPath\""
-    fi
-    echo; echo "===================================================================="
-    echo $CMD; echo
-    eval "$CMD" # eval needs double quotes to work properly with such string
-}
-
-getAbsFilePath() {
-    # $1 : file path, doesn't matter relative or absolute
-    echo $(cd "$(dirname "$1")" && pwd)/$(basename "$1")
-}
-
-convertPics() {
-	local targetFormat=$1
-	shift 1
-	local REMOVEORIGINAL=0
-	if [ $1 = "-c" ]; then
-		REMOVEORIGINAL=1
-		shift 1
-	fi
-
-
-	local moreArgs=()
-	while [ ! -f $1 ]; do
-		moreArgs+=$1
-		shift 1
-	done
-
-	for file in $@; do
-		local name="${file%.*}"
-		local ext="${file##*.}"
-		local newFile=${file%.*}.format.$targetFormat
-		CMD="magick convert ${moreArgs[@]} $file $newFile"
-        echo $CMD
+    if [ ! $targetExt = "png" ]; then
+        CMD="convertPics -rf $targetExt -cy ${moreArgs[@]} \"$pngPath\""
+        #echo $CMD
         eval "$CMD"
-		if [ $REMOVEORIGINAL = 1 ]; then
-			echo "With -c, the original file $file will be removed, y to continue."
-			#read CONTINUE # for BASH
-			read -q CONTINUE # for zsh
-			echo # for zsh
-			if [ "$CONTINUE" != "y" ]; then
-				return
-			else
-				rm $file
-			fi
-		fi
-	done
-}
-
-convertPicsInDir() {
-	local sourceFormat=$1
-	shift 1
-	local targetFormat=$1
-	shift 1
-	local moreArgs=()
-	local RECURSIVE=1
-	if [ $1 = "-nr" ]; then
-		RECURSIVE=0
-		shift 1
-	fi
-	local REMOVEORIGINAL=0
-	if [ $1 = "-c" ]; then
-		REMOVEORIGINAL=1
-		echo "With -c, the original file will be removed, y to continue."
-		#read CONTINUE # for BASH
-		read -q CONTINUE # for zsh
-		echo # for zsh
-		if [ "$CONTINUE" != "y" ]; then
-			return
-		fi
-		shift 1
-	fi
-	while [ ! -d $1 ]; do
-		moreArgs+=$1
-		shift 1
-	done
-	convertInOneDir() {
-		local RM=$1
-		shift 1
-		local X=$(find $1 -maxdepth 1 -name "*.$sourceFormat")
-
-		if [ ! -z $X ]; then
-			for file in $1/*.$sourceFormat; do
-				if [ -d $file ]; then
-					continue
-				fi
-				local newFile=${file%.*}.format.$targetFormat
-				echo magick convert ${moreArgs[@]} $file $newFile
-				magick convert ${moreArgs[@]} $file $newFile
-				if [ $RM = 1 ]; then
-					echo rm $file
-					rm $file
-				fi
-			done
-		fi
-	}
-
-
-	if [ $RECURSIVE = 0 ]; then
-		convertInOneDir $REMOVEORIGINAL $1
-	else
-		local OIFS=$IFS
-		local IFS=$'\n' DIRS=($(find "$1" -type d))
-		local IFS=$OIFS
-		for d in ${DIRS}; do
-			convertInOneDir $REMOVEORIGINAL $d
-		done
-	fi
+    fi
 }
 
 compressPDF() {
@@ -412,3 +249,55 @@ compressPDF() {
 	local targetFile=${1%.*}.resize.pdf
 	gs -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/printer -sOutputFile=$targetFile $sourceFile
 }
+
+
+_getAbsFilePath() {
+    # $1 : file path, doesn't matter relative or absolute
+    echo $(cd "$(dirname "$1")" && pwd)/$(basename "$1")
+}
+
+
+_convertInOneDir() {
+    local moreArgs=()
+    while [ ! -d $1 ]; do
+        moreArgs+=$1
+        shift 1
+    done
+    for file in $1/*.*; do
+        local CMD="convertPics ${moreArgs[@]} \"$file\""
+        #echo $CMD
+        eval "$CMD"
+    done
+}
+
+
+_convertPicsInDirs() {
+	local moreArgs=()
+	local RECURSIVE=1
+	if [ $1 = "-nr" ]; then
+		RECURSIVE=0
+		shift 1
+	fi
+	local RM=0
+	while [ ! -d $1 ]; do
+		moreArgs+=$1
+		shift 1
+	done
+
+	if [ $RECURSIVE = 0 ]; then
+        local CMD="_convertInOneDir ${moreArgs[@]} \"$1\""
+        #echo $CMD
+        eval "$CMD"
+	else
+		local OIFS=$IFS
+		local IFS=$'\n' DIRS=($(find "$1" -type d))
+		local IFS=$OIFS
+		for d in ${DIRS}; do
+            local CMD="_convertInOneDir ${moreArgs[@]} \"$d\""
+            #echo $CMD
+            eval "$CMD"
+		done
+	fi
+}
+
+
