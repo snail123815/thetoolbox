@@ -47,7 +47,7 @@ jdk() {
 	/usr/libexec/java_home -V
  }
 
-convertPics() {
+cpics() {
     local resize=0
     local reformat=0
     local sourceExt=0
@@ -180,7 +180,7 @@ EOF
             fi
 
             if [[ $CMD == "magick"* ]]; then
-                echo $CMD; echo
+                echo; echo $CMD; echo
             fi
             eval "$CMD"
 
@@ -201,7 +201,7 @@ EOF
 }
 
 
-convertSvg() {
+csvg() {
     local inkscapePath="/usr/local/bin/inkscape"
     local dpi=300
     local targetExt="png"
@@ -228,23 +228,28 @@ convertSvg() {
     done
 
     local svgPath=$(_getAbsFilePath "$1")
-    local pngPath="${svgPath%.*}.png"
+    
+    if [ ! $targetExt = "png" ] && [ ! $targetExt = "pdf" ]; then
+        local targetPath="${svgPath%.*}.png"
+    else
+        local targetPath="${svgPath%.*}.$targetExt"
+    fi
 
-    local CMD="$inkscapePath -o \"$pngPath\" -d $dpi -C"
+    local CMD="$inkscapePath -o \"$targetPath\" -d $dpi -C"
     if [ $whiteBg = 1 ]; then
         CMD+=" -b white"
     fi
     CMD+=" \"$svgPath\""
-    #echo $CMD; echo
+    echo; echo $CMD; echo
     eval "$CMD" # eval needs double quotes to work properly with such string
-    if [ ! $targetExt = "png" ]; then
-        CMD="convertPics -rf $targetExt -cy ${moreArgs[@]} \"$pngPath\""
+    if [ ! $targetExt = "png" ] && [ ! $targetExt = "pdf" ]; then
+        CMD="convertPics -rf $targetExt -cy ${moreArgs[@]} \"$targetPath\""
         #echo $CMD
         eval "$CMD"
     fi
 }
 
-compressPDF() {
+pdfCompress() {
 	local sourceFile=$1
 	local targetFile=${1%.*}.resize.pdf
 	gs -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/printer -sOutputFile=$targetFile $sourceFile
