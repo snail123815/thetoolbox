@@ -116,7 +116,7 @@ au User Ncm2Plugin call ncm2#register_source({
     \ 'on_complete': ['ncm2#on_complete#omni', 'csscomplete#CompleteCSS'],
     \ })
 " IMPORTANT: python3 path
-let g:python3_host_prog = 'python3'
+let g:python3_host_prog = '$HOME/apps/micromamba/bin/python3'
 
 " 'plasticboy/vim-markdown'
 let g:vim_markdown_toc_autofit = 1
