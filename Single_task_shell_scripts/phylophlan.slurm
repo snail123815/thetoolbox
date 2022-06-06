@@ -11,10 +11,12 @@
 
 CPU=15
 baseDir=/data1/projects/pi-vriesendorpb/duc/Proj_tree
-sourceDir=/data1/projects/pi-vriesendorpb/duc/Proj_tree
+sourceDir=ncbi-ftp-download-Streptomyces-15
 configFile="$baseDir"/ncbi-ftp-download-Streptomyces-phylophanDB.cfg
 configDir="$baseDir"/phylophlan_configs
 outputDir="$baseDir"/"$sourceDir"-tree-on-phylophlanDB
+rm -rf $outputDir
+mkdir -p $outputDir
 CONDA_ENV="/data1/projects/pi-vriesendorpb/condaEnvs/phylophlan"
 source /home/duc/.bashrc
 
@@ -28,7 +30,7 @@ CMD+=" --diversity low"
 CMD+=" --nproc ""$CPU"
 CMD+=" --output_folder ""$outputDir"
 CMD+=" -f ""$configFile"
-CMD+=" --config_folder ""$configDir"
+CMD+=" --configs_folder ""$configDir"
 CMD+=" --verbose 2>&1 |"
 CMD+=" tee ""$outputDir"/phylophlan_output.log
 
@@ -40,9 +42,10 @@ echo "[$SHELL] #### Starting Job"
 echo "[$SHELL] This is $SLURM_JOB_USER, job ID $SLURM_JOB_ID"
 echo "[$SHELL] Node scratch: ""$SCRATCH"
 # Enter the designed environment
-echo "[$SHELL] Activate AntiSMASH at $CONDA_ENV"
+echo "[$SHELL] Activate env at $CONDA_ENV"
 
 micromamba activate $CONDA_ENV
+echo "[$SHELL] "$(which phylophlan)
 
 # Get start time
 START_TIME=$(date +%s)
