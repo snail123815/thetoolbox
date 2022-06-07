@@ -142,7 +142,7 @@ EOF
             fi
 
             if [ $ext = 'svg' ]; then
-                local CMD="convertSvg "
+                local CMD="csvg "
                 if [ ! $reformat = 1 ]; then
                     echo "input svg without reformat will anyway be converted to png"
                     reformat=1
