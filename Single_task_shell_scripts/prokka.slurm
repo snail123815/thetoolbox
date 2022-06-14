@@ -4,26 +4,26 @@
 #SBATCH  --error=prokka_MBT.err
 #SBATCH --ntasks=8
 #SBATCH --mem=10G
-#SBATCH --partition=cpu-short
-#SBATCH --time=01:00:00
+#SBATCH --partition=testing
+#SBATCH --time=00:10:00
 #SBATCH --mail-user="c.du@biology.leidenuniv.nl"
-#SBATCH --mail-type="ALL"
+#SBATCH --mail-type="NONE"
 
 NCPU="8"
 
-TARGET="MBT.fa"
-GENUS="actinobacteria"
+TARGET="Chitinophaga_sp_94_O.fna"
+GENUS="Chitinophaga"
 SPECIES="sp."
-STRAIN="MBT"
+STRAIN="94"
 LOCUSTAG="LOCUS_TAG_MBT"
 PREFIX="prokka_MBT" # Filename output prefix [auto] (default '')
 OUTPUT_NAME=$PREFIX"_$STRAIN""_$LOCUSTAG"_$(date "+%Y%m%d_%H%M%S")
 
-GRAM="POS"
+GRAM="neg"
 CENTRE="MBT"
 GCODE="11"
 
-CONDA_ENV="/data/projects/pi-vriesendorpb/tools/anaconda3/envs/prokka_with_signalp"
+CONDA_ENV="~/genvs/prokka"
 source /home/duc/.bashrc
 
 SCRATCH=/scratchdata/${SLURM_JOB_USER}/${SLURM_JOB_ID} # fresh for every job
@@ -42,6 +42,7 @@ CMD+=" --locustag "$LOCUSTAG
 CMD+=" --gram "$GRAM
 CMD+=" --prefix "$PREFIX
 CMD+=" --gcode "$GCODE
+CMD+=" --outdir "$TEMPRES
 CMD+=" --cpu "$NCPU
 CMD+=" "$TARGET
 ##################################################
@@ -65,21 +66,27 @@ export LANG=en_US.UTF-8
 export LC_ALL=en_US.UTF-8
 
 # Start the work
-echo "[$SHELL] Copy target to scratch."
-cp -r "$CWD/$TARGET" "$RUNDIR"
+cpCMD="cp -r "$CWD"/"$TARGET" "$SCRATCH
+echo "[$SHELL] Copy target to scratch: $cpCMD"
+eval "$cpCMD"
 echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
-cd "$RUNDIR" || exit
+cd "$SCRATCH"
+echo "[$SHELL] Current dir tree"
+pwd -P
+tree -L 2
 
 echo "[$SHELL] Run: Prokka"
 echo "[$SHELL] Command: \$ $CMD"
 eval "$CMD"
+echo "[$SHELL] Current dir tree:"
+tree -L 2
 
 if [ -d "$TEMPRES" ]; then
     echo "[$SHELL] Command execution finished."
     echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
     echo "[$SHELL] Save to $OUTPUTDIR"
     mkdir -p "$OUTPUTDIR"
-    cp -a "$TEMPRES" "$OUTPUTDIR"
+    cp -a "$TEMPRES"/* "$OUTPUTDIR"
     echo "[$SHELL] #### DONE"
 else
     echo "[$SHELL] Output dir $TEMPRES not found, command execution failed."

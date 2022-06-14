@@ -121,6 +121,7 @@ let g:python3_host_prog = 'python3'
 " 'plasticboy/vim-markdown'
 let g:vim_markdown_toc_autofit = 1
 let g:vim_markdown_math = 1
+let g:vim_markdown_folding_level = 2
 
 " 'mzlogin/vim-markdown-toc'
 let g:vmt_dont_insert_fence = 1
@@ -153,10 +154,11 @@ inoremap <expr> <CR> (pumvisible() ? "\<c-y>\<cr>" : "\<CR>")
 augroup filetype_md
 	autocmd!
 	:autocmd FileType markdown setlocal tabstop=2 shiftwidth=2 softtabstop=2 expandtab autoindent
-	:autocmd FileType markdown noremap <silent> k gk
-	:autocmd FileType markdown noremap <silent> j gj
-	:autocmd FileType markdown noremap <silent> 0 g0
-	:autocmd FileType markdown noremap <silent> $ g$
+    :autocmd FileType markdown noremap <silent> k gk
+    :autocmd FileType markdown noremap <silent> j gj
+    :autocmd FileType markdown noremap <silent> 0 g0
+    :autocmd FileType markdown noremap <silent> $ g$
+    :autocmd FileType markdown noremap <silent> ^ g^
 augroup end
 
 augroup filetype_py

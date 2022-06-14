@@ -24,8 +24,9 @@ function afmagic_dashes {
 }
 
 # primary prompt
-PS1='$my_gray%n@%m%{$reset_color%} $FG[032]%~$(git_prompt_info)$(hg_prompt_info) $FG[237]${(l.$(afmagic_dashes)..-.)}%{$reset_color%}
-${return_code%}$FG[105]%(!.#.»)%{$reset_color%} '
+#PS1='$my_gray%n@%m%{$reset_color%} $FG[032]%~$(git_prompt_info)$(hg_prompt_info) $FG[237]${(l.$(afmagic_dashes)..-.)}%{$reset_color%}
+PS1='$my_gray%n@%m%{$reset_color%} $FG[032]%~$(git_prompt_info)$(hg_prompt_info) $FG[237]${return_code%}%{$reset_color%}
+$FG[105]%(!.#.$)%{$reset_color%} '
 #RPS1='${return_code}'
 
 # git settings
