@@ -1,21 +1,21 @@
 #!/bin/bash
-#SBATCH   --job-name=phyl
+#SBATCH --job-name=phyl
 #SBATCH --output=phyl.out
 #SBATCH  --error=phyl.err
-#SBATCH --ntasks=15
-#SBATCH --mem=60G
-#SBATCH --partition=cpu-short
-#SBATCH --time=03:59:00
+#SBATCH --ntasks=20
+#SBATCH --mem=150G
+#SBATCH --partition=cpu-medium
+#SBATCH --time=23:59:00
 #SBATCH --mail-user="c.du@biology.leidenuniv.nl"
-#SBATCH --mail-type="ALL"
+#SBATCH --mail-type="END"
 
-CPU=15
-baseDir=/data1/projects/pi-vriesendorpb/duc/Proj_tree
-sourceDir=ncbi-ftp-download-Streptomyces-15
-configFile="$baseDir"/ncbi-ftp-download-Streptomyces-phylophanDB.cfg
-configDir="$baseDir"/phylophlan_configs
-outputDir="$baseDir"/"$sourceDir"-tree-on-phylophlanDB
-rm -rf $outputDir
+CPU=20
+baseDir=/data1/duc/Proj_tree
+sourceDir=ready_genomes
+outputDir="$baseDir"/"$sourceDir"-treeBuild
+
+configFile="$baseDir"/phylophlan-dna-dna.cfg
+maas="$baseDir"/phylophlan_subsititution_models.tsv
 mkdir -p $outputDir
 CONDA_ENV="/data1/projects/pi-vriesendorpb/condaEnvs/phylophlan"
 source /home/duc/.bashrc
@@ -23,14 +23,39 @@ source /home/duc/.bashrc
 ########################################################
 # Command build
 
+MKCFG="phylophlan_write_config_file "
+MKCFG+=" -o "$configFile
+MKCFG+=" -d n"
+MKCFG+=" --db_dna makeblastdb"
+MKCFG+=" --map_dna blastn"
+MKCFG+=" --msa muscle"
+MKCFG+=" --trim trimal"
+MKCFG+=" --tree1 fasttree"
+MKCFG+=" --tree2 raxml"
+MKCFG+=" --overwrite"
+
+CMD_CLEAN="phylophlan"
+CMD_CLEAN+=" -c ""$baseDir"/"$sourceDir"
+CMD_CLEAN+=" -d scoCoreGenes"
+CMD_CLEAN+=" --maas "$maas
+CMD_CLEAN+=" --diversity low"
+CMD_CLEAN+=" --nproc ""$CPU"
+CMD_CLEAN+=" --output_folder ""$outputDir"
+CMD_CLEAN+=" -f ""$configFile"
+
 CMD="phylophlan"
 CMD+=" -i ""$baseDir"/"$sourceDir"
-CMD+=" -d phylophlan"
+CMD+=" -d scoCoreGenes"
+CMD+=" --maas "$maas
 CMD+=" --diversity low"
 CMD+=" --nproc ""$CPU"
 CMD+=" --output_folder ""$outputDir"
 CMD+=" -f ""$configFile"
-CMD+=" --configs_folder ""$configDir"
+#CMD+=" --configs_folder ""$configDir" # config folder needs to be at 
+## $CONDA_ENV/lib/python3.1/site-packages/phylophlan/phylophlan_configs/
+## phylophlan_write_config_file $CONDA_ENV/lib/python3.1/site-packages/phylophlan/phylophlan_configs/
+## Problem is the `python3.1` in the path.
+
 CMD+=" --verbose 2>&1 |"
 CMD+=" tee ""$outputDir"/phylophlan_output.log
 
@@ -63,7 +88,15 @@ export LC_ALL=en_US.UTF-8
 #echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
 #cd "$SCRATCH" || exit
 
-echo "[$SHELL] Run command:"
+echo "[$SHELL] Run make config file command:"
+echo "[$SHELL] \$ $MKCFG"
+eval "$MKCFG"
+
+echo "[$SHELL] Run cleaning command:"
+echo "[$SHELL] \$ $CMD_CLEAN"
+eval "$CMD_CLEAN"
+
+echo "[$SHELL] Run tree building command:"
 echo "[$SHELL] \$ $CMD"
 eval "$CMD"
 
@@ -77,5 +110,5 @@ eval "$CMD"
 #else
 #    echo "[$SHELL] Output dir $TEMPRES not found, command execution failed."
 #fi
-#
-#echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
+
+echo "[$SHELL] Time elaspsed: $(date -ud "@$(($(date +%s) - START_TIME))" +%T) (HH:MM:SS)"
