@@ -161,7 +161,7 @@ augroup end
 
 augroup filetype_py
     autocmd!
-    :autocmd FileType python setlocal shiftwidth=4 tabstop=4 softtabstop=4 noexpandtab autoindent smartindent
+    :autocmd FileType python setlocal shiftwidth=4 tabstop=4 softtabstop=4 expandtab autoindent smartindent
     :autocmd FileType python setlocal colorcolumn=80
     :autocmd FileType python setlocal path=.,**
     :autocmd FileType python setlocal wildignore=*/__pycache__/*,*.pyc
