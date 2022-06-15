@@ -251,6 +251,7 @@ csvg() {
 
 
 cpdf() {
+    "
     # Usage:
     # cpdf input.pdf
     #     will generate input.resize.pdf with dpi=300 quality=printer
@@ -263,6 +264,7 @@ cpdf() {
     # Requirements: (1) Ghostscript needs to be installed on the local system.
     #              (2) ImageMagick needs to be installed on the local system.
     #
+    "
     local sDEVICE=pdfwrite
     local ext=pdf
     local CMD="gs -dNOPAUSE -dBATCH"
@@ -314,9 +316,9 @@ cpdf() {
         local targetPdf=${sourceFile%.*}.$ext.pdf
         local $I2PCMD="magick convert"
         I2PCMD+=" \"${sourceFile%.*}*.$ext\""
-        I2PCMD+=" ""\"$targetPdf\"";;
+        I2PCMD+=" ""\"$targetPdf\""
         echo $I2PCMD
-        eval $I2PCMD
+        eval "$I2PCMD"
     fi
 
 }
