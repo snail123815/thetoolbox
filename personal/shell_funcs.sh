@@ -1,11 +1,31 @@
+
 notebookSync() {
-	echo
 	local CWD=$PWD
-	local NOTEBOOK=~/jianguoYUN/Reports/NOTEBOOK/
+    local NOTEBOOKs=(
+        ~/NOTEBOOK/
+        ~/GitProjects/IBLProteomics
+    )
+    for n in ${NOTEBOOKs[@]}; do
+        _notebookSync $n
+    done
+	cd $CWD
+
+	echo
+    echo "####### Sync images ####"
+    echo
+    imgbedSync
+    echo
+	echo "####### ALL DONE #######"
+	echo
+}
+
+_notebookSync() {
+	echo
+	local NOTEBOOK=$1
 	echo "PATH to notebook:"
 	echo $NOTEBOOK
 	echo
-	local COMMENT=${1:-$(date)}
+	local COMMENT=${:-$(date)}
 	echo Comment is: "$COMMENT"
 	if [ "$COMMENT" = "" ]; then
 		echo succeed
@@ -15,14 +35,6 @@ notebookSync() {
 	git add .
 	git commit -m $COMMENT
 	git push
-	cd $CWD
-	echo
-    echo "####### Sync images ####"
-    echo
-    imgbedSync
-    echo
-	echo "####### ALL DONE #######"
-	echo
 }
 
 imgbedSync() {
