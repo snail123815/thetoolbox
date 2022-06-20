@@ -263,20 +263,21 @@ csvg() {
 
 
 cpdf() {
-    "
-    # Usage:
-    # cpdf input.pdf
-    #     will generate input.resize.pdf with dpi=300 quality=printer
-    # cpdf -png input.pdf
-    #     will generate input-N.png file for each page and then combine them into input.png.pdf file
-    # cpdf -jpeg/jpg input.pdf
-    #     will generate input-N.jpeg file for each page and then combine them into input.jpeg.pdf file
-    #
-    # you can add -r 300 ro -res 300 when using -png or -jpeg/jpg to specify resolution of generated picture
-    # Requirements: (1) Ghostscript needs to be installed on the local system.
-    #              (2) ImageMagick needs to be installed on the local system.
-    #
-    "
+    local showHelp() {
+        cat << EOF
+Usage:
+cpdf input.pdf
+    will generate input.resize.pdf with dpi=300 quality=printer
+cpdf -png [-r 300] input.pdf
+    will generate input-N.png file for each page and then combine them into input.png.pdf file
+cpdf -jpeg/jpg [-r 300] input.pdf
+    will generate input-N.jpeg file for each page and then combine them into input.jpeg.pdf file
+
+you can add -r 300 ro -res 300 when using -png or -jpeg/jpg to specify resolution of generated picture
+Requirements: (1) Ghostscript needs to be installed on the local system.
+             (2) ImageMagick needs to be installed on the local system.
+EOF
+    }
     local sDEVICE=pdfwrite
     local ext=pdf
     local CMD="gs -dNOPAUSE -dBATCH"
@@ -294,6 +295,9 @@ cpdf() {
             -r | -res)
                 res=" -r"$2
                 shift 2 ;;
+            -h | help | -help | --help)
+                showHelp
+                return ;;
             *)
                 if [ ! -f $1 ]; then
                     echo "File "\"$1\"" not found."
@@ -326,7 +330,7 @@ cpdf() {
 
     if [ ! $ext = 'pdf' ]; then
         local targetPdf=${sourceFile%.*}.$ext.pdf
-        local $I2PCMD="magick convert"
+        local I2PCMD="magick convert"
         I2PCMD+=" \"${sourceFile%.*}*.$ext\""
         I2PCMD+=" ""\"$targetPdf\""
         echo $I2PCMD
