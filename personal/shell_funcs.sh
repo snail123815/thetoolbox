@@ -1,11 +1,31 @@
+
 notebookSync() {
-	echo
 	local CWD=$PWD
-	local NOTEBOOK=~/jianguoYUN/Reports/NOTEBOOK/
+    local NOTEBOOKs=(
+        ~/NOTEBOOK/
+        ~/GitProjects/IBLProteomics
+    )
+    for n in ${NOTEBOOKs[@]}; do
+        _notebookSync $n
+    done
+	cd $CWD
+
+	echo
+    echo "####### Sync images ####"
+    echo
+    imgbedSync
+    echo
+	echo "####### ALL DONE #######"
+	echo
+}
+
+_notebookSync() {
+	echo
+	local NOTEBOOK=$1
 	echo "PATH to notebook:"
 	echo $NOTEBOOK
 	echo
-	local COMMENT=${1:-$(date)}
+	local COMMENT=${:-$(date)}
 	echo Comment is: "$COMMENT"
 	if [ "$COMMENT" = "" ]; then
 		echo succeed
@@ -15,14 +35,6 @@ notebookSync() {
 	git add .
 	git commit -m $COMMENT
 	git push
-	cd $CWD
-	echo
-    echo "####### Sync images ####"
-    echo
-    imgbedSync
-    echo
-	echo "####### ALL DONE #######"
-	echo
 }
 
 imgbedSync() {
@@ -249,10 +261,93 @@ csvg() {
     fi
 }
 
-pdfCompress() {
-	local sourceFile=$1
-	local targetFile=${1%.*}.resize.pdf
-	gs -dNOPAUSE -dBATCH -sDEVICE=pdfwrite -dCompatibilityLevel=1.4 -dPDFSETTINGS=/printer -sOutputFile=$targetFile $sourceFile
+
+cpdf() {
+    local showHelp() {
+        cat << EOF
+Usage:
+cpdf input.pdf
+    will generate input.resize.pdf with dpi=300 quality=printer
+cpdf -png [-r 300] input.pdf
+    will generate input-N.png file for each page and then combine them into input.png.pdf file
+cpdf -jpeg/jpg [-r 300] input.pdf
+    will generate input-N.jpeg file for each page and then combine them into input.jpeg.pdf file
+
+you can add -r 300 ro -res 300 when using -png or -jpeg/jpg to specify resolution of generated picture
+Requirements: (1) Ghostscript needs to be installed on the local system.
+             (2) ImageMagick needs to be installed on the local system.
+EOF
+    }
+    local sDEVICE=pdfwrite
+    local ext=pdf
+    local CMD="gs -dNOPAUSE -dBATCH"
+    local res=" -r600"
+    while [ ! -f $1 ]; do
+        case $1 in
+            -png)
+                sDEVICE=png16m
+                ext=png
+                shift 1 ;;
+            -jpg | -jpeg)
+                sDEVICE=jpeg
+                ext=${1:1}
+                shift 1 ;;
+            -r | -res)
+                res=" -r"$2
+                shift 2 ;;
+            -h | help | -help | --help)
+                showHelp
+                return ;;
+            *)
+                if [ ! -f $1 ]; then
+                    echo "File "\"$1\"" not found."
+                    return 1
+                fi
+        esac
+    done
+
+    local sourceFile=$1
+    local sourceExt="${sourceFile##*.}"
+    if [ ! $sourceExt = 'pdf' ]; then
+        echo "Target file should be *.pdf"
+        return 1
+    fi
+
+    CMD+=" -sDEVICE=$sDEVICE"
+
+    if [ $ext = 'pdf' ]; then
+        CMD+=" -dCompatibilityLevel=1.4 -dPDFSETTINGS=/printer"
+        local targetFile=${sourceFile%.*}.resize.$ext
+    else
+        CMD+=$res
+        local targetFile=${sourceFile%.*}-%03d.$ext
+    fi
+
+    CMD+=" -sOutputFile=""\"$targetFile\""" ""\"$sourceFile\""
+
+    echo $CMD
+    eval "$CMD"
+
+    if [ ! $ext = 'pdf' ]; then
+        local targetPdf=${sourceFile%.*}.$ext.pdf
+        local I2PCMD="magick convert"
+        I2PCMD+=" \"${sourceFile%.*}*.$ext\""
+        I2PCMD+=" ""\"$targetPdf\""
+        echo $I2PCMD
+        eval "$I2PCMD"
+    fi
+
+}
+
+
+__join_by() {
+    local d=$1 f=$2
+    printf $s $f
+    if shift 2; then
+        for i in $@; do
+            printf %s "$d""$i"
+        done
+    fi
 }
 
 
