@@ -401,3 +401,43 @@ _convertPicsInDirs() {
 }
 
 
+
+endnoteSync() {
+    local ENDNOTELOCAL="~/Documents/EndnoteLocal/"
+    local ENDNOTECLOUD="~/Nutstore\ Files/EndnoteCloud/"
+    local EXCLUDEFILE="~/Nutstore\ Files/EndnoteCloud/rsyncExclude.txt"
+    local CMD="rsync -ahP --delete"
+    # CMD+=" --dry-run"
+    CMD+=" --exclude-from "$EXCLUDEFILE
+    CMD+=" "$ENDNOTELOCAL" "$ENDNOTECLOUD
+    echo
+    echo $CMD
+    echo
+    eval "$CMD"
+}
+
+resourceSync() {
+    local RESOURCEJIANGUO="~/Nutstore\ Files/Resources/"
+    local RESOURCEONEDRIVE="~/Library/CloudStorage/OneDrive-UniversiteitLeiden/Resources_OneDrive/"
+    local RESOURCEEXCLUDE="~/Library/CloudStorage/OneDrive-UniversiteitLeiden/Resources_OneDrive/rsyncExclude.txt"
+    local CMD="rsync -ahP --delete"
+    # CMD+=" --dry-run"
+    CMD+=" --exclude-from "$RESOURCEEXCLUDE
+    CMD+=" "$RESOURCEONEDRIVE" "$RESOURCEJIANGUO
+    echo
+    echo $CMD
+    echo
+    DRYCMD=$CMD" --dry-run"
+    eval "$DRYCMD"
+    echo
+    echo "Confirm action?"
+    if [[ $0 == *'zsh' ]]; then
+        read -q CONTINUE # for zsh
+    else
+        read CONTINUE # for BASH, I don't know others...
+    fi
+    echo # new line
+    if [ "$CONTINUE" = "y" ]; then
+        eval "$CMD"
+    fi
+}
