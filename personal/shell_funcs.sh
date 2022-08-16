@@ -2,8 +2,8 @@
 notebookSync() {
 	local CWD=$PWD
     local NOTEBOOKs=(
-        ~/NOTEBOOK/
-        ~/GitProjects/IBLProteomics
+        ~/notebook/labnotebook
+        ~/notebook/IBLProteomics
     )
     for n in ${NOTEBOOKs[@]}; do
         _notebookSync $n
@@ -39,7 +39,7 @@ _notebookSync() {
 
 imgbedSync() {
 	local currentdir=$(PWD)
-    local imgbedRepo="$HOME/GitProjects/imgRepo"
+    local imgbedRepo="$HOME/notebook/sbt9LZTo4cfkX8kHKwPI"
     echo "Images local path: "$imgbedRepo
     echo
 	cd $imgbedRepo && git pull -v
