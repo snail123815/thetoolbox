@@ -59,16 +59,16 @@ jdk() {
 	/usr/libexec/java_home -V
  }
 
-cpics() {
+cpics() (
     local resize=0
     local reformat=0
     local sourceExt=0
     local RM=0
     local args=()
     local moreArgs=()
-    local showHelp() {
-        cat << EOF
-Usage: convertPics [options] FILE(s)/DIR(s)
+    showHelp() {
+        cat <<EOF
+Usage: cpics [options] FILE(s)/DIR(s)
 Convert input img file or files in directory into target format.
 
 inkscape will be used to convert .svg files.
@@ -104,7 +104,7 @@ EOF
 
     while [ ! -f $1 ] && [ ! -d $1 ]; do
         case $1 in
-            -h)
+            -h | --help)
                 showHelp
                 return ;;
             -rf)
@@ -210,7 +210,7 @@ EOF
         fi
 
     done
-}
+)
 
 
 csvg() {
@@ -262,8 +262,8 @@ csvg() {
 }
 
 
-cpdf() {
-    local showHelp() {
+cpdf() (
+    showHelp() {
         cat << EOF
 Usage:
 cpdf input.pdf
@@ -337,7 +337,7 @@ EOF
         eval "$I2PCMD"
     fi
 
-}
+)
 
 
 __join_by() {
