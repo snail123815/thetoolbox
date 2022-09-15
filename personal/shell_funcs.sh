@@ -214,7 +214,7 @@ EOF
 
 
 csvg() {
-    local inkscapePath="/usr/local/bin/inkscape"
+    local inkscapePath="inkscape"
     local dpi=300
     local targetExt="png"
     local whiteBg=1
@@ -255,7 +255,7 @@ csvg() {
     echo; echo $CMD; echo
     eval "$CMD" # eval needs double quotes to work properly with such string
     if [ ! $targetExt = "png" ] && [ ! $targetExt = "pdf" ]; then
-        CMD="convertPics -rf $targetExt -cy ${moreArgs[@]} \"$targetPath\""
+        CMD="cpics -rf $targetExt -cy ${moreArgs[@]} \"$targetPath\""
         #echo $CMD
         eval "$CMD"
     fi
