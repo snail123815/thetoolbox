@@ -26,10 +26,12 @@ def runProkka(
     cpu: int = 4,
     shell: Literal['bash', 'zsh'] = 'zsh',
     output: Path = Path("."),
-    prefix: str = 'prokka'
+    prefix: str = 'prokka',
+    silent: bool = False
 ) -> Path:
 
-    print(f'Running prokka for {fastaPath}')
+    if not silent:
+        print(f'Running prokka for {fastaPath}')
 
     unzip = False
     if fastaPath.suffix == '.gz':
@@ -44,14 +46,16 @@ def runProkka(
         unzip = True
 
     timeStr = datetime.now().strftime(r'%Y%m%d%H%M')
-    outdir = output/("_".join(item for item in
-                              [prefix, genus, species, strain, timeStr]
-                              if item is not None))
+    prefix = "_".join(item for item in
+                      [prefix, genus, species, strain, timeStr]
+                      if item is not None)
+    outdir = output/prefix
     cmd = 'prokka --compliant --addgenes --mincontiglen 200 --rfam' + \
         f' --gcode {gcode}' + \
         f' --gram {gram}' + \
         f' --cpu {cpu}' + \
         f' --outdir {outdir}' + \
+        f' --prefix {prefix}' + \
         (f' --centre {center}' if center is not None else "") + \
         (f' --genus {genus}' if genus is not None else "") + \
         (f' --strain {strain}' if strain is not None else "") + \
