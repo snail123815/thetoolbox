@@ -7,7 +7,9 @@ import os
 
 def getArgs():
     import argparse
-    parser = argparse.ArgumentParser(description='Run antismash for genbank files')
+    parser = argparse.ArgumentParser(
+        description='Run antismash for genbank files'
+    )
     parser.add_argument('--ncpu', type=int, default=4)
     parser.add_argument('genbankfiles', type=str, nargs="+", required=True)
     return parser.parse_args()
@@ -45,18 +47,18 @@ def runAntismash(
     try:
         timeStr = datetime.now().strftime(r'%Y%m%d%H%M')
         prefix = ("_".join(item for item in
-                        [prefix, title, f'level{completeness}', timeStr]
-                        if item is not None))
+                           [prefix, title, f'level{completeness}', timeStr]
+                           if item is not None))
         if output is None:
             output = genbankFilePath.parent
         outdir = output/prefix
-        cmd = f'antismash --cpus {cpu} --genefinding-tool none' + \
-            f' --taxon {taxon}' + \
-            f' --html-title {prefix}' + \
-            f' --output-dir {outdir}'
+        cmd = (f'antismash --cpus {cpu} --genefinding-tool none'
+               + f' --taxon {taxon}'
+               + f' --html-title {prefix}'
+               + f' --output-dir {outdir}')
         if description is not None:
             cmd += f' --html-description {description}'
-        
+
         if completeness > 1:
             cmd += ' --cb-general --cb-knownclusters --cb-subclusters'
             cmd += ' --clusterhmmer'
@@ -64,16 +66,18 @@ def runAntismash(
                 cmd += ' --cassis'
         if completeness > 2:
             cmd += ' --asf'
-            cmd += ' --rre' # needs fimo
+            cmd += ' --rre'  # needs fimo
             cmd += ' --fullhmmer'
             cmd += ' --tigrfam'
             cmd += ' --smcog-trees'
 
         cmd += f' {genbankFilePath}'
 
-        activateEnvCmd = f'eval "$(micromamba shell hook --shell={shell})"' + \
-            f' && micromamba activate {condaEnv}' + \
-            f' && {cmd}'
+        activateEnvCmd = (
+            f'eval "$(micromamba shell hook --shell={shell})"'
+            + f' && micromamba activate {condaEnv}'
+            + f' && {cmd}'
+        )
         commandResult = subprocess.run(
             activateEnvCmd, capture_output=True, shell=True,
             executable=shell

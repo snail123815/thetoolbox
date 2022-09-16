@@ -50,22 +50,22 @@ def runProkka(
                       [prefix, genus, species, strain, timeStr]
                       if item is not None)
     outdir = output/prefix
-    cmd = 'prokka --compliant --addgenes --mincontiglen 200 --rfam' + \
-        f' --gcode {gcode}' + \
-        f' --gram {gram}' + \
-        f' --cpu {cpu}' + \
-        f' --outdir {outdir}' + \
-        f' --prefix {prefix}' + \
-        (f' --centre {center}' if center is not None else "") + \
-        (f' --genus {genus}' if genus is not None else "") + \
-        (f' --strain {strain}' if strain is not None else "") + \
-        (f' --species {species}' if species is not None else "") + \
-        (f' --locustag {locustag}' if locustag is not None else "") + \
-        f' {fastaPath}'
+    cmd = ('prokka --compliant --addgenes --mincontiglen 200 --rfam'
+           + f' --gcode {gcode}'
+           + f' --gram {gram}'
+           + f' --cpu {cpu}'
+           + f' --outdir {outdir}'
+           + f' --prefix {prefix}'
+           + (f' --centre {center}' if center is not None else "")
+           + (f' --genus {genus}' if genus is not None else "")
+           + (f' --strain {strain}' if strain is not None else "")
+           + (f' --species {species}' if species is not None else "")
+           + (f' --locustag {locustag}' if locustag is not None else "")
+           + f' {fastaPath}')
 
-    activateEnvCmd = f'eval "$(micromamba shell hook --shell={shell})"' + \
-        f' && micromamba activate {condaEnv}' + \
-        f' && {cmd}'
+    activateEnvCmd = (f'eval "$(micromamba shell hook --shell={shell})"'
+                      + f' && micromamba activate {condaEnv}'
+                      + f' && {cmd}')
     commandResult = subprocess.run(
         activateEnvCmd, capture_output=True, shell=True,
         executable=shell
