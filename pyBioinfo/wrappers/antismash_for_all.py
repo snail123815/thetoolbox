@@ -1,10 +1,11 @@
 import argparse
+from importlib.metadata import files
 import logging
-from typing import Literal
 from pathlib import Path
 from multiprocessing import Pool
+from tqdm import tqdm
 
-from ..bioSequences.bio_seq_file_extensions \
+from bioSequences.bio_seq_file_extensions \
     import GBK_EXTENSIONS, FNA_EXTENSIONS
 from decompress import IMPLEMENTED_COMPRESSION_FORMATS
 from antismash import runAntismash
@@ -17,7 +18,7 @@ def main():
         help='Input folder containing gbk files (can be gz or xz)'
     )
     parser.add_argument(
-        '--processes',
+        '--parrllel',
         type=int, default=8,
         help="Number of antismashes run in parallel"
     )
@@ -27,10 +28,12 @@ def main():
     )
     parser.add_argument(
         '--taxon', type=str,
+        choices=['bacteria', 'fungi'],
         default='bacteria'
     )
     parser.add_argument(
-        '--completeness', type=Literal[1, 2, 10],
+        '--completeness', type=int,
+        choices=[1, 2, 3, 10],
         help=f'Completeness of antismash run',
         default=2
     )
@@ -41,12 +44,19 @@ def main():
         '--overwrite', action='store_true'
     )
     parser.add_argument(
-        '--geneFinding', type=Literal[
-            'glimmerhmm', 'prodigal', 'prodigal-m', 'none', 'error'
+        '--geneFinding', type=str,
+        choices=[
+            'glimmerhmm', 'prodigal', 'prodigal-m', 'auto', 'error'
         ],
-        help=', '.join(['glimmerhmm', 'prodigal',
-                       'prodigal-m', 'none', 'error']),
-        default='none'
+        help= '--geneFinding-tool for antismash, except "auto".'
+        + 'It means "none" when the input is gbk file'
+        + ' which should contain annotation.\n'
+        + 'The antismash logic based on the fact that gbk file canbe both'
+        + 'with or without annotation. But sometimes it miss interprate that.'
+        + 'Implementation of this program is that:'
+        + 'If input is genbank file, use "none" if set to "auto"'
+        + 'If input is DNA sequence file, use "prodigal" if set to "auto"',
+        default='auto'
     )
     args = parser.parse_args()
 
@@ -55,12 +65,18 @@ def main():
     pathOut.mkdir(exist_ok=True)
     logging.basicConfig(filename=pathOut / 'antismash.log',
                         filemode='a', level='INFO')
+    logging.info('#' * 100)
 
-    files = getValidFiles(pathIn, allowGeneFinding=args.allowGeneFinding)
+    files = getValidFiles(pathIn,
+                          allowGeneFinding=(args.geneFinding != 'error'))
 
-    runnerPool = Pool(args.processes)
+    runnerPool = Pool(args.parrllel)
     results = []
     for f in files:
+        if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
+            output = pathOut/f.with_suffix('').stem
+        else:
+            output = pathOut/f.stem
         results.append(
             runnerPool.apply_async(
                 runAntismash,
@@ -70,40 +86,40 @@ def main():
                     "taxon": args.taxon,
                     "completeness": args.completeness,
                     "cpu": args.threads,
-                    "output": pathOut,
+                    "output": output,
                     "silent": True,
                     "dry": args.dry,
-                    "geneFindingTool": args.geneFinding,
+                    "geneFinding": args.geneFinding,
                     'overwrite': args.overwrite,
                 }
             )
         )
     runnerPool.close()
     returns = []
-    if args.noProgress:
-        for res in results:
-            returns.append(res.get())
-    else:
-        from tqdm import tqdm
-        for res in tqdm(results):
-            returns.append(res.get())
+    for res in tqdm(results):
+        returns.append(res.get())
     logging.info('#' * 100)
-    returns.sort(key=lambda x: x[0])
+    returns.sort(key=lambda x: x.name)
     for ret in returns:
         logging.info(ret)
+    logging.info('#' * 100)
 
 
 def getValidFiles(path: Path, allowGeneFinding: bool) -> list[Path]:
     newFiles: list[Path] = []
+    fileStems = []
     allowedExts = (GBK_EXTENSIONS + FNA_EXTENSIONS if allowGeneFinding
                    else GBK_EXTENSIONS)
     for f in [f for f in path.iterdir() if f.is_file()]:
         if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
             ext = f.with_suffix('').suffix
+            stem = f.with_suffix('').stem
         else:
             ext = f.suffix
-        if ext in allowedExts:
+            stem = f.stem
+        if ext in allowedExts and stem not in fileStems:
             newFiles.append(f)
+            fileStems.append(stem)
     return newFiles
 
 

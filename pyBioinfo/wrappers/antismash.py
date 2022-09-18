@@ -1,8 +1,11 @@
 import subprocess
+import logging
 from pathlib import Path
 from typing import Literal
+import shutil
 from datetime import datetime
 import os
+import sys
 from _environment_settings import \
     CONDAEXE, ANTISMASH_ENV, SHELL, getActivateEnvCmd
 from decompress import decompFileIfCompressed, IMPLEMENTED_COMPRESSION_FORMATS
@@ -15,14 +18,36 @@ def main():
         description='Run antismash for genbank files'
     )
     parser.add_argument('--ncpu', type=int, default=4)
+    parser.add_argument(
+        '--taxon', type=str,
+        choices=['bacteria', 'fungi'],
+        default='bacteria'
+    )
     parser.add_argument('--completeness',
                         type=int,
                         choices=[1, 2, 3, 10],
                         default=2)
     parser.add_argument('--dry', action='store_true')
-    parser.add_argument('--geneFinding', type=str, default='none')
+    parser.add_argument(
+        '--geneFinding', type=str,
+        choices=[
+            'glimmerhmm', 'prodigal', 'prodigal-m', 'auto', 'error'
+        ],
+        help= '--geneFinding-tool for antismash, except "auto".'
+        + 'It means "none" when the input is gbk file'
+        + ' which should contain annotation.\n'
+        + 'The antismash logic based on the fact that gbk file canbe both'
+        + 'with or without annotation. But sometimes it miss interprate that.'
+        + 'Implementation of this program is that:'
+        + 'If input is genbank file, use "none" if set to "auto"'
+        + 'If input is DNA sequence file, use "prodigal" if set to "auto"',
+        default='error'
+    )
     parser.add_argument('files', type=Path, nargs="+")
     args = parser.parse_args()
+    logging.basicConfig(level=logging.INFO,
+                        format='%(message)s',
+                        handlers=[logging.StreamHandler(sys.stdout)])
     for f in args.files:
         if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
             prefix = f.with_suffix('').stem + '_antismash'
@@ -30,6 +55,7 @@ def main():
             prefix = f.stem + '_antismash'
         runAntismash(f, cpu=args.ncpu,
                      dry=args.dry,
+                     taxon=args.taxon,
                      geneFinding=args.geneFinding,
                      prefix=prefix,
                      completeness=args.completeness)
@@ -49,7 +75,7 @@ def runAntismash(
     prefix: str = 'antismash',
     addDateTimeToPrefix: bool = False,
     geneFinding: Literal[
-        'glimmerhmm', 'prodigal', 'prodigal-m', 'none', 'error'
+        'glimmerhmm', 'prodigal', 'prodigal-m', 'auto', 'error'
     ] = 'error',
     defaultGeneFinding: str = 'prodigal',
     silent: bool = False,
@@ -57,8 +83,7 @@ def runAntismash(
     overwrite: bool = False
 ) -> Path:
 
-    if not silent:
-        print(f'Running antiSMASH for {inputFilePath}')
+    logging.info(f'Running antiSMASH for {inputFilePath}')
 
     inputFilePath, unzip = decompFileIfCompressed(inputFilePath)
 
@@ -79,11 +104,11 @@ def runAntismash(
             outdir = output
         if (outdir / 'index.html').exists():
             if overwrite:
-                outdir.rmdir()
+                shutil.rmtree(outdir)
             else:
                 raise FileExistsError(str(outdir))
         elif outdir.exists():
-            outdir.rmdir()
+            shutil.rmtree(outdir)
 
         cmd = (f'antismash --cpus {cpu}'
                + ' --minimal'
@@ -91,8 +116,10 @@ def runAntismash(
                + f' --taxon {taxon}'
                + f' --html-title {prefix}'
                + f' --output-dir {outdir}')
-        if inputFilePath.suffix in FNA_EXTENSIONS and geneFinding == 'none':
+        if inputFilePath.suffix in FNA_EXTENSIONS and geneFinding == 'auto':
             cmd += f' --genefinding-tool {defaultGeneFinding}'
+        elif geneFinding == 'auto':
+            cmd += f' --genefinding-tool none'
         else:
             cmd += f' --genefinding-tool {geneFinding}'
         if description is not None:
@@ -119,7 +146,7 @@ def runAntismash(
         cmd += f' {inputFilePath}'
 
         if not silent:
-            print(cmd)
+            logging.info(cmd)
 
         cmd = ' && '.join([
             getActivateEnvCmd(condaEnv, condaExe, shell),
@@ -127,20 +154,21 @@ def runAntismash(
         ])
 
         if dry:
-            print(cmd)
+            logging.info(cmd)
         else:
             commandResult = subprocess.run(
                 cmd, capture_output=True, shell=True,
                 executable=shell
             )
             if commandResult.returncode != 0:
-                print('Failed antismash:')
-                print(cmd)
-                print(commandResult.stdout.decode())
-                print(commandResult.stderr.decode())
+                logging.error('Failed antismash:')
+                logging.error(cmd)
+                logging.error(commandResult.stdout.decode())
+                logging.error(commandResult.stderr.decode())
     finally:
         if unzip:
             os.remove(str(inputFilePath))
+    logging.info(f'Done antiSMASH for {inputFilePath}')
 
     return outdir.resolve()
 
