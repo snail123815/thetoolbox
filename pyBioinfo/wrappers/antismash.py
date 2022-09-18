@@ -9,18 +9,30 @@ from decompress import decompFileIfCompressed, IMPLEMENTED_COMPRESSION_FORMATS
 from bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
 
 
-def getArgs():
+def main():
     import argparse
     parser = argparse.ArgumentParser(
         description='Run antismash for genbank files'
     )
     parser.add_argument('--ncpu', type=int, default=4)
     parser.add_argument('--completeness',
-                        type=int, default=2)
+                        type=int,
+                        choices=[1, 2, 3, 10],
+                        default=2)
     parser.add_argument('--dry', action='store_true')
     parser.add_argument('--geneFinding', type=str, default='none')
     parser.add_argument('files', type=Path, nargs="+")
-    return parser.parse_args()
+    args = parser.parse_args()
+    for f in args.files:
+        if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
+            prefix = f.with_suffix('').stem + '_antismash'
+        else:
+            prefix = f.stem + '_antismash'
+        runAntismash(f, cpu=args.ncpu,
+                     dry=args.dry,
+                     geneFinding=args.geneFinding,
+                     prefix=prefix,
+                     completeness=args.completeness)
 
 
 def runAntismash(
@@ -35,6 +47,7 @@ def runAntismash(
     output: Path | None = None,
     shell: Literal['bash', 'zsh'] = SHELL,
     prefix: str = 'antismash',
+    addDateTimeToPrefix: bool = False,
     geneFinding: Literal[
         'glimmerhmm', 'prodigal', 'prodigal-m', 'none', 'error'
     ] = 'error',
@@ -51,15 +64,16 @@ def runAntismash(
 
     try:
         if output is None:
-            # timeStr = datetime.now().strftime(r'%Y%m%d%H%M')
             prefix = ("_".join(item for item in
                                [
-                                prefix,
-                                title,
-                                f'level{completeness}',
-                                # timeStr
+                                   prefix,
+                                   title,
+                                   f'level{completeness}',
                                ]
                                if item is not None))
+            if addDateTimeToPrefix:
+                timeStr = datetime.now().strftime(r'%Y%m%d%H%M')
+                prefix += "_" + timeStr
             outdir = inputFilePath.parent / prefix
         else:
             outdir = output
@@ -129,20 +143,6 @@ def runAntismash(
             os.remove(str(inputFilePath))
 
     return outdir.resolve()
-
-
-def main():
-    args = getArgs()
-    for f in args.files:
-        if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
-            prefix = f.with_suffix('').stem + '_antismash'
-        else:
-            prefix = f.stem + '_antismash'
-        runAntismash(f, cpu=args.ncpu,
-                     dry=args.dry,
-                     geneFinding=args.geneFinding,
-                     prefix=prefix,
-                     completeness=args.completeness)
 
 
 if __name__ == "__main__":
