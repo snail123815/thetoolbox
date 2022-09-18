@@ -3,7 +3,7 @@ import subprocess
 from tempfile import NamedTemporaryFile
 from tempfile import _TemporaryFileWrapper
 
-implementedCompressions = ['.gz', '.xz']
+IMPLEMENTED_COMPRESSION_FORMATS: list[str] = ['.gz', '.xz']
 
 
 def decompressFile(filePath: Path) -> Path:
@@ -32,7 +32,7 @@ def decompressFile(filePath: Path) -> Path:
 
 
 def decompFileIfCompressed(filePath: Path) -> tuple[Path, bool]:
-    if filePath.suffix in implementedCompressions:
+    if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
         return decompressFile(filePath), True
     else:
         return filePath, False
