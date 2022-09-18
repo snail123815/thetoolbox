@@ -33,7 +33,7 @@ def main():
         choices=[
             'glimmerhmm', 'prodigal', 'prodigal-m', 'auto', 'error'
         ],
-        help= '--geneFinding-tool for antismash, except "auto".'
+        help='--geneFinding-tool for antismash, except "auto".'
         + 'It means "none" when the input is gbk file'
         + ' which should contain annotation.\n'
         + 'The antismash logic based on the fact that gbk file canbe both'
@@ -45,9 +45,8 @@ def main():
     )
     parser.add_argument('files', type=Path, nargs="+")
     args = parser.parse_args()
-    logging.basicConfig(level=logging.INFO,
-                        format='%(message)s',
-                        handlers=[logging.StreamHandler(sys.stdout)])
+    logging.basicConfig(stream=sys.stdout,
+                        level='INFO')
     for f in args.files:
         if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
             prefix = f.with_suffix('').stem + '_antismash'
@@ -80,7 +79,8 @@ def runAntismash(
     defaultGeneFinding: str = 'prodigal',
     silent: bool = False,
     dry: bool = False,
-    overwrite: bool = False
+    overwrite: bool = False,
+    existsOk: bool = False
 ) -> Path:
 
     logging.info(f'Running antiSMASH for {inputFilePath}')
@@ -105,6 +105,9 @@ def runAntismash(
         if (outdir / 'index.html').exists():
             if overwrite:
                 shutil.rmtree(outdir)
+            elif existsOk:
+                logging.info(f'Find result file in {outdir}, pass.')
+                return outdir.resolve()
             else:
                 raise FileExistsError(str(outdir))
         elif outdir.exists():

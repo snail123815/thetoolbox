@@ -61,9 +61,9 @@ def main():
     args = parser.parse_args()
 
     pathIn = Path(args.p.strip())
-    pathOut = pathIn.parent / (pathIn.name + '-antismash')
+    pathOut = pathIn.parent / (f'{pathIn.name}_antismash_level{args.completeness}')
     pathOut.mkdir(exist_ok=True)
-    logging.basicConfig(filename=pathOut / 'antismash.log',
+    logging.basicConfig(filename=pathOut / 'antismashkk.log',
                         filemode='a', level='INFO')
     logging.info('#' * 100)
 
@@ -91,6 +91,7 @@ def main():
                     "dry": args.dry,
                     "geneFinding": args.geneFinding,
                     'overwrite': args.overwrite,
+                    "existsOk": True
                 }
             )
         )
@@ -98,7 +99,7 @@ def main():
     returns = []
     for res in tqdm(results):
         returns.append(res.get())
-    logging.info('#' * 100)
+    logging.info('Result files in:')
     returns.sort(key=lambda x: x.name)
     for ret in returns:
         logging.info(ret)
