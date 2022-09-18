@@ -3,6 +3,8 @@ from pathlib import Path
 from typing import Literal
 from datetime import datetime
 import os
+from _environment_settings import \
+    SHELL, CONDAEXE, PROKKA_ENV, getActivateEnvCmd
 
 
 def getArgs():
@@ -22,9 +24,10 @@ def runProkka(
     species: str | None = None,
     strain: str | None = None,
     locustag: str | None = None,
-    condaEnv: Path | None = None,
+    condaEnv: Path | None = Path(PROKKA_ENV),
+    condaExe: str = CONDAEXE,
     cpu: int = 4,
-    shell: Literal['bash', 'zsh'] = 'zsh',
+    shell: Literal['bash', 'zsh'] = SHELL,
     output: Path = Path("."),
     prefix: str = 'prokka',
     silent: bool = False
@@ -49,7 +52,7 @@ def runProkka(
     prefix = "_".join(item for item in
                       [prefix, genus, species, strain, timeStr]
                       if item is not None)
-    outdir = output/prefix
+    outdir = output / prefix
     cmd = ('prokka --compliant --addgenes --mincontiglen 200 --rfam'
            + f' --gcode {gcode}'
            + f' --gram {gram}'
@@ -63,11 +66,12 @@ def runProkka(
            + (f' --locustag {locustag}' if locustag is not None else "")
            + f' {fastaPath}')
 
-    activateEnvCmd = (f'eval "$(micromamba shell hook --shell={shell})"'
-                      + f' && micromamba activate {condaEnv}'
-                      + f' && {cmd}')
+    if not silent:
+        print(cmd)
+
+    cmd = ' && '.join([getActivateEnvCmd(condaEnv, condaExe, shell), cmd])
     commandResult = subprocess.run(
-        activateEnvCmd, capture_output=True, shell=True,
+        cmd, capture_output=True, shell=True,
         executable=shell
     )
     if commandResult.returncode != 0:
