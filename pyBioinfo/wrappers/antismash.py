@@ -23,7 +23,7 @@ def runAntismash(
     title: str | None = None,
     description: str | None = None,
     taxon: Literal['bacteria', 'fungi'] = 'bacteria',
-    completeness: Literal[1, 2, 3] = 2,
+    completeness: Literal[1, 2, 10] = 2,
     condaExe: Literal['conda', 'mamba', 'micromamba'] = CONDAEXE,
     condaEnv: Path | None = ANTISMASH_ENV,
     cpu: int = 4,
@@ -47,19 +47,27 @@ def runAntismash(
             output = genbankFilePath.parent
         outdir = output/prefix
         cmd = (f'antismash --cpus {cpu} --genefinding-tool none'
+               + ' --minimal'
+               + ' --skip-zip-file'
                + f' --taxon {taxon}'
                + f' --html-title {prefix}'
                + f' --output-dir {outdir}')
         if description is not None:
             cmd += f' --html-description {description}'
 
-        if completeness > 1:
-            cmd += ' --cb-general --cb-knownclusters --cb-subclusters'
+        if completeness >= 2:
+            cmd = cmd.replace(' --minimal', '')
+            cmd += ' --cb-knownclusters'
+            cmd += ' --cb-subclusters'
+            cmd += ' --asf'
+        if completeness >= 3:
+            cmd += ' --cb-general'
+            cmd += ' --cc-mibig'
             cmd += ' --clusterhmmer'
+            cmd += " --pfam2go"
             if taxon == 'fungi':
                 cmd += ' --cassis'
-        if completeness > 2:
-            cmd += ' --asf'
+        if completeness >= 4:
             cmd += ' --rre'  # needs fimo
             cmd += ' --fullhmmer'
             cmd += ' --tigrfam'
