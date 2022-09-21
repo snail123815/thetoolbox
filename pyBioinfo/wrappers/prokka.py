@@ -3,7 +3,7 @@ from pathlib import Path
 from typing import Literal
 from datetime import datetime
 import os
-from _environment_settings import \
+from ._environment_settings import \
     SHELL, CONDAEXE, PROKKA_ENV, getActivateEnvCmd
 
 

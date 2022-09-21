@@ -2,23 +2,27 @@ from pathlib import Path
 from typing import TypedDict
 from typing import NewType
 from typing import cast
-import sys
-sys.path.append('/vol/home/duc/myRepos/toolbox-du')
-from Single_task_shell_scripts import \
-    runProkka, runAntismash, getFaaFromGbk, decompFileIfCompressed
+from pyBioinfo.wrappers.prokka import runProkka
+from pyBioinfo.wrappers.antismash import runAntismash
+from pyBioinfo.wrappers.decompress import decompFileIfCompressed
+from pyBioinfo.bioSequences.extract_proteins_from_gbk import getFaaFromGbk
+from pyBioinfo.bioSequences.gbk_to_gff import gbkToGff
 from tqdm import tqdm
 from multiprocessing import Pool
 import shutil
 
+rootPath = Path('/vol/local/MBT-collection')
+
 targetDirs = [
-    'MBT-initial-96strains',
-    'MBT-continue-collection',
-    'MBT-noRawData-collection'
+    rootPath / 'MBT-initial-96strains',
+    rootPath / 'MBT-continue-collection',
+    rootPath / 'MBT-noRawData-collection'
 ]
-collectionGbkDir = Path('collective-gbk').resolve()
-collectionFnaDir = Path('collective-fna').resolve()
-collectionFaaDir = Path('collective-faa').resolve()
-collectionAntismashDir = Path('collective-antismash/').resolve()
+collectionGbkDir = (rootPath / 'collective-gbk').resolve()
+collectionGffDir = (rootPath / 'collective-gff').resolve()
+collectionFnaDir = (rootPath / 'collective-fna').resolve()
+collectionFaaDir = (rootPath / 'collective-faa').resolve()
+collectionAntismashDir = (rootPath / 'collective-antismash').resolve()
 knownSpecies = [
     'Streptomyces',
     'Kitasatospora',
@@ -27,6 +31,7 @@ knownSpecies = [
 ]
 fnaExtensions = ['.fna', '.fasta', '.fa']
 gbkExtensions = ['.gbk', '.gb', '.genbank', '.gbff']
+gffExtensions = ['.gff']
 faaExtensions = ['.faa']
 highPriorityKeywords = ['RefSeq']
 priorityExceptions = ['MBT56', 'MBT84']
@@ -45,6 +50,7 @@ class StrainPaths(TypedDict):
     rootPath: Path
     fnaPath: Path
     gbkPath: Path | None
+    gffPath: Path | None
     faaPath: Path | None
     antismashPath: Path | None
 
@@ -53,13 +59,14 @@ StrainsInfo = NewType('StrainsInfo', dict[str, StrainPaths])
 
 
 def getSuffixWithCompression(p: Path) -> str:
-    return (p.suffixes[-2] if p.suffix in allowedCompressions else p.suffix)
+    return (p.suffixes[-2] if p.suffix.lower()
+            in allowedCompressions else p.suffix.lower())
 
 
 def findAnnotation(
     strainRoot: Path,
     removePartial: bool = True
-) -> tuple[Path, Path] | tuple[None, None]:
+) -> tuple[Path, Path, Path] | tuple[None, None, None]:
     annotationRoot = strainRoot / annotationUnderStrainRoot
     try:
         annotationDirs = [d for d in annotationRoot.iterdir() if d.is_dir()]
@@ -72,23 +79,38 @@ def findAnnotation(
         for d in sourceDirs:
             gbks = [f for f in d.iterdir()
                     if getSuffixWithCompression(f) in gbkExtensions]
-            faas = [gbk.with_suffix('').with_suffix('.faa')
+            for faaExt in faaExtensions:
+                faas = [
+                    gbk.with_suffix('').with_suffix(faaExt)
                     if gbk.suffix in allowedCompressions
-                    else gbk.with_suffix('.faa')
-                    for gbk in gbks]
+                    else gbk.with_suffix(faaExt)
+                    for gbk in gbks
+                ]
+            for gffExt in gffExtensions:
+                gffs = [
+                    gbk.with_suffix('').with_suffix(gffExt)
+                    if gbk.suffix in allowedCompressions
+                    else gbk.with_suffix(gffExt)
+                    for gbk in gbks
+                ]
             if len(gbks) == 0:
                 if removePartial:
                     shutil.rmtree(str(d.resolve()))
-            for gbk, faa in zip(gbks, faas):
+            for gbk, gff, faa in zip(gbks, gffs, faas):
                 if not faa.exists():
-                    getFaaFromGbk(gbk)
-                    assert faa.exists()
-                gbkfaaPairs.append((gbk, faa))
+                    faaGenerated = getFaaFromGbk(gbk)
+                    assert faaGenerated.exists()
+                    faa = faaGenerated
+                if not gff.exists():
+                    gffGenerated = gbkToGff(gbk)
+                    assert gffGenerated.exists()
+                    gff = gffGenerated
+                gbkfaaPairs.append((gbk, gff, faa))
 
-        gbkPath, faaPath = gbkfaaPairs[0]
+        gbkPath, gffPath, faaPath = gbkfaaPairs[0]
     except (IndexError, FileNotFoundError):
-        return None, None
-    return gbkPath, faaPath
+        return None, None, None
+    return gbkPath, gffPath, faaPath
 
 
 def findAssembly(strainRoot: Path) -> Path | None:
@@ -140,7 +162,7 @@ strainsInfo = StrainsInfo({})
 for root in [Path(d) for d in targetDirs]:
     singleStrainDirs = [d for d in root.iterdir() if d.is_dir()]
     for d in singleStrainDirs:
-        gbkPath, faaPath = findAnnotation(d)
+        gbkPath, gffPath, faaPath = findAnnotation(d)
         fnaPath = findAssembly(d)
         if fnaPath is None:
             continue
@@ -155,6 +177,7 @@ for root in [Path(d) for d in targetDirs]:
             'rootPath': d.resolve(),
             'antismashPath': antismashPath,
             'gbkPath': gbkPath,
+            'gffPath': gffPath,
             'faaPath': faaPath,
             'fnaPath': fnaPath
         }
@@ -212,10 +235,12 @@ if len(noAnnotationStrains) > 0:
                 / annotationUnderStrainRoot,
                 silent=True
             )
-            gbkPath, faaPath = findAnnotation(strainsInfo[strain]['rootPath'])
+            gbkPath, gffPath, faaPath = findAnnotation(
+                strainsInfo[strain]['rootPath'])
             assert gbkPath is not None, \
                 f'Annotation not found in {prokkaDir}'
             strainsInfo[strain]['gbkPath'] = gbkPath
+            strainsInfo[strain]['gffPath'] = gffPath
             strainsInfo[strain]['faaPath'] = faaPath
 
 if len(noAntismashStrains) > 0:
@@ -253,19 +278,26 @@ noAntismashStrains = [strain for strain in strainsInfo if
                       strainsInfo[strain]['antismashPath'] is None]
 assert len(noAnnotationStrains) + len(noAnnotationStrains) == 0
 
-for p in [collectionGbkDir, collectionFnaDir,
+for p in [collectionGbkDir, collectionFnaDir, collectionGffDir,
           collectionFaaDir, collectionAntismashDir]:
     p.mkdir(exist_ok=True)
 for strain, strainPaths in strainsInfo.items():
-    toGbk = collectionGbkDir/f'{strain}.gbk'
-    toFaa =  collectionFaaDir/f'{strain}.faa'
-    toFna = collectionFnaDir/f'{strain}.fna'
+    toGbk = collectionGbkDir / f'{strain}.gbk'
+    toGff = collectionGffDir / f'{strain}.gff'
+    toFaa = collectionFaaDir / f'{strain}.faa'
+    toFna = collectionFnaDir / f'{strain}.fna'
     if not toGbk.exists():
         gbk, rmgbk = decompFileIfCompressed(strainPaths['gbkPath'])
         if rmgbk:
             shutil.move(gbk, toGbk)
         else:
             shutil.copyfile(gbk, toGbk)
+    if not toGff.exists():
+        gff, rmgff = decompFileIfCompressed(strainPaths['gffPath'])
+        if rmgff:
+            shutil.move(gff, toGff)
+        else:
+            shutil.copyfile(gff, toGff)
     if not toFaa.exists():
         faa, rmfaa = decompFileIfCompressed(strainPaths['faaPath'])
         if rmfaa:
@@ -285,6 +317,6 @@ for strain, strainPaths in strainsInfo.items():
     if len(bgcGbks) > 0:
         antismashRoot.mkdir(exist_ok=True)
         for f in bgcGbks:
-            toBgcGbk =  antismashRoot / f'{strain}_{f.name}'
+            toBgcGbk = antismashRoot / f'{strain}_{f.name}'
             if not toBgcGbk.exists():
                 shutil.copyfile(f, toBgcGbk)

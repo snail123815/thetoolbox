@@ -1,11 +1,16 @@
 
 # TODO: write a script change this file
-SHELL = 'zsh'
-CONDAEXE = 'micromamba'
+from typing import Literal
+from pathlib import Path
 
-ANTISMASH_ENV = '~/genvs/quasan'
-BUSCO_ENV = '~/genvs/quasan'
-PROKKA_ENV = '~/genvs/quasan'
+
+SHELL: Literal['bash', 'zsh'] = 'zsh'
+CONDAEXE: Literal['conda', 'mamba', 'micromamba'] = 'micromamba'
+
+ANTISMASH_ENV: Path | None = Path.home()/'genvs/quasan'
+BUSCO_ENV: Path | None = Path.home()/'genvs/quasan'
+PROKKA_ENV: Path | None = Path.home()/'genvs/quasan'
+
 
 def getActivateEnvCmd(condaEnv, condaExe=CONDAEXE, shell=SHELL):
     if condaExe == 'micromamba':

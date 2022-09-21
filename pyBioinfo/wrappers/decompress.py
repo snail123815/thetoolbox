@@ -6,6 +6,13 @@ from tempfile import _TemporaryFileWrapper
 IMPLEMENTED_COMPRESSION_FORMATS: list[str] = ['.gz', '.xz']
 
 
+def getSuffixAfterDecompression(filePath: Path) -> str:
+    if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
+        return filePath.with_suffix('').suffix
+    else:
+        return filePath.suffix
+
+
 def decompressFile(filePath: Path) -> Path:
     match filePath.suffix:
         case '.gz':

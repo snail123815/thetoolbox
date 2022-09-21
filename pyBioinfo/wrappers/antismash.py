@@ -6,10 +6,10 @@ import shutil
 from datetime import datetime
 import os
 import sys
-from _environment_settings import \
+from ._environment_settings import \
     CONDAEXE, ANTISMASH_ENV, SHELL, getActivateEnvCmd
-from decompress import decompFileIfCompressed, IMPLEMENTED_COMPRESSION_FORMATS
-from bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
+from .decompress import decompFileIfCompressed, IMPLEMENTED_COMPRESSION_FORMATS
+from ..bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
 
 
 def main():
