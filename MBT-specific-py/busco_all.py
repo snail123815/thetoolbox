@@ -1,4 +1,4 @@
-from wrappers.busco import runBusco
+from pyBioinfo.wrappers.busco import runBusco
 from pathlib import Path
 from multiprocessing import Pool
 from tqdm import tqdm
