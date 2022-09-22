@@ -1,3 +1,10 @@
+#######
+# For each dir, split the files based on:
+# rawD = dname+'_raw'
+# mqD = dname+'_mqAnalysis'
+# mqRes = dname+'_mqResult'
+
+
 import os
 import argparse
 import shutil
