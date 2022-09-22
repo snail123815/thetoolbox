@@ -5,59 +5,11 @@ from typing import Literal
 import shutil
 from datetime import datetime
 import os
-import sys
-from ._environment_settings import \
-    CONDAEXE, ANTISMASH_ENV, SHELL, getActivateEnvCmd
-from .decompress import decompFileIfCompressed, IMPLEMENTED_COMPRESSION_FORMATS
-from ..bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
-
-
-def main():
-    import argparse
-    parser = argparse.ArgumentParser(
-        description='Run antismash for genbank files'
-    )
-    parser.add_argument('--ncpu', type=int, default=4)
-    parser.add_argument(
-        '--taxon', type=str,
-        choices=['bacteria', 'fungi'],
-        default='bacteria'
-    )
-    parser.add_argument('--completeness',
-                        type=int,
-                        choices=[1, 2, 3, 10],
-                        default=2)
-    parser.add_argument('--dry', action='store_true')
-    parser.add_argument(
-        '--geneFinding', type=str,
-        choices=[
-            'glimmerhmm', 'prodigal', 'prodigal-m', 'auto', 'error'
-        ],
-        help='--geneFinding-tool for antismash, except "auto".'
-        + 'It means "none" when the input is gbk file'
-        + ' which should contain annotation.\n'
-        + 'The antismash logic based on the fact that gbk file canbe both'
-        + 'with or without annotation. But sometimes it miss interprate that.'
-        + 'Implementation of this program is that:'
-        + 'If input is genbank file, use "none" if set to "auto"'
-        + 'If input is DNA sequence file, use "prodigal" if set to "auto"',
-        default='error'
-    )
-    parser.add_argument('files', type=Path, nargs="+")
-    args = parser.parse_args()
-    logging.basicConfig(stream=sys.stdout,
-                        level='INFO')
-    for f in args.files:
-        if f.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
-            prefix = f.with_suffix('').stem + '_antismash'
-        else:
-            prefix = f.stem + '_antismash'
-        runAntismash(f, cpu=args.ncpu,
-                     dry=args.dry,
-                     taxon=args.taxon,
-                     geneFinding=args.geneFinding,
-                     prefix=prefix,
-                     completeness=args.completeness)
+from pyBioinfo_modules.wrappers._environment_settings \
+    import CONDAEXE, ANTISMASH_ENV, SHELL, getActivateEnvCmd
+from pyBioinfo_modules.basic.decompress \
+    import decompFileIfCompressed
+from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
 
 
 def runAntismash(
@@ -176,5 +128,3 @@ def runAntismash(
     return outdir.resolve()
 
 
-if __name__ == "__main__":
-    main()

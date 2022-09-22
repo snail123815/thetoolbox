@@ -1,4 +1,3 @@
-import argparse
 import subprocess
 import os
 from pathlib import Path
@@ -9,6 +8,9 @@ from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
 from Bio.Data.CodonTable import TranslationError
 
+from pyBioinfo_modules.basic.decompress import decompFileIfCompressed
+from pyBioinfo_modules.bioSequences.bio_seq_file_extensions \
+    import GBK_EXTENSIONS
 
 def getProteins(seqObj, codonTable=11):
     """Extract proteins from a SeqRecord.""" \
@@ -50,21 +52,9 @@ def getProteins(seqObj, codonTable=11):
 
 
 def getFaaFromGbk(gbkPath: Path, codonTable=11) -> Path:
-    unzip = False
-    if gbkPath.suffix == '.gz':
-        gzipd = subprocess.run(
-            f'gzip -dkf {gbkPath}'.split(),
-            capture_output=True
-        )
-        assert gzipd.returncode == 0
-        gbkPath = gbkPath.with_suffix('')
-        assert gbkPath.exists(), '\n'.join([
-            f'Unzip file {gbkPath} failed with error message:',
-            gzipd.stderr.decode(), gzipd.stdout.decode()
-        ])
-        unzip = True
+    gbkPath, unzip = decompFileIfCompressed(gbkPath)
+    faaPath = gbkPath.with_suffix('.faa')
     try:
-        faaPath = gbkPath.with_suffix('.faa')
         proteins = []
         for s in SeqIO.parse(str(gbkPath), 'genbank'):
             proteins.extend(getProteins(s, codonTable=codonTable))
@@ -76,13 +66,3 @@ def getFaaFromGbk(gbkPath: Path, codonTable=11) -> Path:
         if unzip:
             os.remove(str(gbkPath))
     return faaPath
-
-
-def main():
-    argparser = argparse.ArgumentParser()
-    argparser.add_argument('file', help='genbank file')
-
-    args = argparser.parse_args()
-    gbkPath = Path(args.file)
-    faaPath = getFaaFromGbk(gbkPath)
-    print(faaPath)

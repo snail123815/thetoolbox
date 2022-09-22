@@ -2,11 +2,11 @@ from pathlib import Path
 from typing import TypedDict
 from typing import NewType
 from typing import cast
-from pyBioinfo.wrappers.prokka import runProkka
-from pyBioinfo.wrappers.antismash import runAntismash
-from pyBioinfo.wrappers.decompress import decompFileIfCompressed
-from pyBioinfo.bioSequences.extract_proteins_from_gbk import getFaaFromGbk
-from pyBioinfo.bioSequences.gbk_to_gff import gbkToGff
+from pyBioinfo_modules.wrappers.prokka import runProkka
+from pyBioinfo_modules.wrappers.antismash import runAntismash
+from pyBioinfo_modules.basic.decompress import decompFileIfCompressed
+from pyBioinfo_modules.bioSequences.protein_from_gbk import getFaaFromGbk
+from pyBioinfo_modules.bioSequences.gbk_to_gff import gbkToGff
 from tqdm import tqdm
 from multiprocessing import Pool
 import shutil

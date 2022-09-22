@@ -3,7 +3,7 @@
 import subprocess
 from pathlib import Path
 from typing import Literal
-from _environment_settings import \
+from pyBioinfo_modules.wrappers._environment_settings import \
     SHELL, CONDAEXE, BUSCO_ENV, getActivateEnvCmd
 
 
@@ -11,7 +11,7 @@ def runBusco(
     targetProteome: Path,
     outName: str,
     outPath: Path,
-    condaEnv: Path | None = Path(BUSCO_ENV),
+    condaEnv: Path | None = BUSCO_ENV,
     condaExe: Literal['conda', 'micromamba', 'mamba'] = CONDAEXE,
     shell: Literal['bash', 'zsh'] = SHELL,
     silent: bool = False,

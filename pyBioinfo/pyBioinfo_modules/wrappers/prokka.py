@@ -3,16 +3,9 @@ from pathlib import Path
 from typing import Literal
 from datetime import datetime
 import os
-from ._environment_settings import \
+from pyBioinfo_modules.wrappers._environment_settings import \
     SHELL, CONDAEXE, PROKKA_ENV, getActivateEnvCmd
 
-
-def getArgs():
-    import argparse
-    parser = argparse.ArgumentParser(description='Run prokka for fasta files')
-    parser.add_argument('--ncpu', type=int, default=4)
-    parser.add_argument('fastas', type=str, nargs="+", required=True)
-    return parser.parse_args()
 
 
 def runProkka(
@@ -24,12 +17,13 @@ def runProkka(
     species: str | None = None,
     strain: str | None = None,
     locustag: str | None = None,
-    condaEnv: Path | None = Path(PROKKA_ENV),
+    condaEnv: Path | None = PROKKA_ENV,
     condaExe: str = CONDAEXE,
     cpu: int = 4,
     shell: Literal['bash', 'zsh'] = SHELL,
-    output: Path = Path("."),
+    output: Path | None = None,
     prefix: str = 'prokka',
+    dry: bool = False,
     silent: bool = False
 ) -> Path:
 
@@ -52,7 +46,10 @@ def runProkka(
     prefix = "_".join(item for item in
                       [prefix, genus, species, strain, timeStr]
                       if item is not None)
-    outdir = output / prefix
+    if output is None:
+        outdir = fastaPath.parent/(fastaPath.stem + '_prokka')
+    else:
+        outdir = output
     cmd = ('prokka --compliant --addgenes --mincontiglen 200 --rfam'
            + f' --gcode {gcode}'
            + f' --gram {gram}'
@@ -70,26 +67,20 @@ def runProkka(
         print(cmd)
 
     cmd = ' && '.join([getActivateEnvCmd(condaEnv, condaExe, shell), cmd])
-    commandResult = subprocess.run(
-        cmd, capture_output=True, shell=True,
-        executable=shell
-    )
-    if commandResult.returncode != 0:
-        print('Failed prokka:')
+    if dry:
         print(cmd)
-        print(commandResult.stdout.decode())
-        print(commandResult.stderr.decode())
+    else:
+        commandResult = subprocess.run(
+            cmd, capture_output=True, shell=True,
+            executable=shell
+        )
+        if commandResult.returncode != 0:
+            print('Failed prokka:')
+            print(cmd)
+            print(commandResult.stdout.decode())
+            print(commandResult.stderr.decode())
 
     if unzip:
         os.remove(str(fastaPath))
 
     return outdir.resolve()
-
-
-def main():
-    runProkka(Path('abc'), condaEnv='~/genvs/quasan')
-    pass
-
-
-if __name__ == "__main__":
-    main()

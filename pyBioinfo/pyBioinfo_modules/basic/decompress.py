@@ -2,15 +2,23 @@ from pathlib import Path
 import subprocess
 from tempfile import NamedTemporaryFile
 from tempfile import _TemporaryFileWrapper
+from os.path import commonpath
 
 IMPLEMENTED_COMPRESSION_FORMATS: list[str] = ['.gz', '.xz']
 
 
-def getSuffixAfterDecompression(filePath: Path) -> str:
+def getSuffixIfCompressed(filePath: Path) -> str:
     if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
         return filePath.with_suffix('').suffix
     else:
         return filePath.suffix
+
+
+def getStemIfCompressed(filePath: Path) -> str:
+    if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
+        return filePath.with_suffix('').stem
+    else:
+        return filePath.stem
 
 
 def decompressFile(filePath: Path) -> Path:
@@ -60,3 +68,22 @@ def decompressToTempTxt(filePath: Path) -> _TemporaryFileWrapper:
     with open(outTempFile.name, 'w') as out:
         subprocess.run([prog, '-dkc', filePath], stdout=out, check=True)
     return outTempFile
+
+
+def getRootAndFiles(
+    pathList: list[Path], allowedExts
+) -> tuple[Path, list[Path]]:
+    targetFiles: list[Path] = []
+    for pathIn in pathList:
+        pathIn = Path(pathIn).resolve()
+        if pathIn.is_dir():
+            for f in pathIn.iterdir():
+                if getSuffixIfCompressed(f) in allowedExts:
+                    targetFiles.append(f)
+        elif pathIn.is_file():
+            assert getSuffixIfCompressed(pathIn) in allowedExts
+            targetFiles.append(pathIn)
+    rootPath: Path = Path(commonpath(targetFiles))
+    if rootPath.is_file():
+        rootPath = rootPath.parent
+    return rootPath, targetFiles

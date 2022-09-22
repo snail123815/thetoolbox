@@ -1,10 +1,10 @@
-from pyBioinfo.wrappers.busco import runBusco
+from pyBioinfo_modules.wrappers.busco import runBusco
 from pathlib import Path
 from multiprocessing import Pool
 from tqdm import tqdm
 from typing import Any
 
-targetRoot = Path('~/gdata/MBT-collection/MBT-noRawData-collection')
+targetRoot = Path(Path.home()/'gdata/MBT-collection/MBT-noRawData-collection')
 targetDirs = [d for d in targetRoot.iterdir() if d.is_dir()
               and len(d.name.split('_')) == 1]
 

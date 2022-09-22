@@ -1,12 +1,12 @@
 from pathlib import Path
 from BCBio import GFF
 from Bio import SeqIO
-from ..wrappers.decompress \
-    import decompFileIfCompressed, getSuffixAfterDecompression
-from .bio_seq_file_extensions import GBK_EXTENSIONS
+from pyBioinfo_modules.basic.decompress \
+    import decompFileIfCompressed, getSuffixIfCompressed
+from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import GBK_EXTENSIONS
 
 def gbkToGff(path: Path) -> Path:
-    assert getSuffixAfterDecompression(path).lower() in GBK_EXTENSIONS
+    assert getSuffixIfCompressed(path).lower() in GBK_EXTENSIONS
     gbkPath, didUnzip = decompFileIfCompressed(path)
     gffPath = gbkPath.with_suffix('.gff')
     with gffPath.open('w') as gff:
