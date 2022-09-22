@@ -1,29 +1,6 @@
 import numpy.polynomial.polynomial as poly
 import numpy as np
 
-def flatten(lst):
-    from functools import reduce
-    from operator import add
-    flatten = lambda lst: [lst] if type(lst) != list else reduce(add, [flatten(ele) for ele in lst])
-    flattened = flatten(lst)
-    flattened = [str(ele) for ele in flattened]
-    return flattened
-# flatten
-
-def findStartLine(csvFile):
-    count = 0
-    with open(csvFile, 'r') as file:
-        for line in file:
-            line = line.strip()
-            if not line.startswith('#'):
-                if line != '':
-                    break
-            count += 1
-
-    return count
-# findStartLine
-
-
 def turning_points(array):
     ''' turning_points(array) -> min_indices, max_indices
     Finds the turning points within an 1D array and returns the indices of the minimum and
