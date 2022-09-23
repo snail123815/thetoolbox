@@ -4,7 +4,7 @@ from pathlib import Path
 from multiprocessing import Pool
 from tqdm import tqdm
 
-from pyBioinfo_modules.bioSequences.bio_seq_file_extensions \
+from pyBioinfo_modules.bio_sequences.bio_seq_file_extensions \
     import GBK_EXTENSIONS, FNA_EXTENSIONS
 from pyBioinfo_modules.basic.decompress \
     import getStemIfCompressed, getRootAndFiles
@@ -68,7 +68,7 @@ ALLOWED_EXTENSIONS = (
 
 outputRoot: Path
 targetFiles: list[Path]
-outputRoot, targetFiles = getRootAndFiles(args.inputFiles)
+outputRoot, targetFiles = getRootAndFiles(args.inputFiles, ALLOWED_EXTENSIONS)
 pathOut = outputRoot.parent / \
     f'{outputRoot.name}_antismash_level{args.completeness}'
 pathOut.mkdir(exist_ok=True)

@@ -2,10 +2,14 @@ from Bio.SeqRecord import SeqRecord
 from Bio import SeqIO
 import os
 import concurrent.futures 
-import sys  # for error handling
-
-from funcs import getSpanFetures 
+import sys
 import pandas as pd
+
+from pyBioinfo_modules.bio_sequences.bio_features import getSpanFetures
+from pyBioinfo_modules.chipseq.find_and_filter import evenLengthAroundSummit 
+from pyBioinfo_modules.chipseq.find_and_filter import filterLikely 
+from pyBioinfo_modules.chipseq.find_and_filter import filterLength 
+from pyBioinfo_modules.chipseq.find_and_filter import filterFoldEnrichment 
 
 
 def readPeak(file, thresh=0):
@@ -115,7 +119,7 @@ def singleFilter(filter, method, filename):
             if subMethod != 'single':
                 raise Exception(
                     f"Method error. For {filter} in {filename} you should use ['single'], \n while {subMethod} has been passed.")
-        from funcs import filterFoldEnrichment as filterFunction
+        filterFunction = filterFoldEnrichment  
 
     elif filter == 'length':
         if method == None:
@@ -123,7 +127,7 @@ def singleFilter(filter, method, filename):
         elif method not in ['dist', 'polyfit'] and type(method) != list:
             raise Exception(
                 f"Method error. For {filter} in {filename} you should use one of ['dist','polyfit', [min, max]], \n while {method} has been passed.")
-        from funcs import filterLength as filterFunction
+        filterFunction = filterLength
 
     elif filter == 'summit':
         if method == None:
@@ -131,7 +135,7 @@ def singleFilter(filter, method, filename):
         elif type(method) != int:
             raise Exception(
                 f"Method error. For {filter} in {filename} you should use integer (+- int around summit), \n while {method} has been passed.")
-        from funcs import evenLengthAroundSummit as filterFunction
+        filterFunction = evenLengthAroundSummit
 
     elif filter == 'likely':
         try:
@@ -139,7 +143,7 @@ def singleFilter(filter, method, filename):
         except:
             raise Exception(
                 f"Method error. For {filter} in {filename} you should use a number, not {method}")
-        from funcs import filterLikely as filterFunction
+        filterFunction = filterLikely
 
     else:
         def filterFunction(df, method=None):

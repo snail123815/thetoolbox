@@ -29,21 +29,21 @@ for f in fileList:
     bam = os.path.join(pathOut, f'{name[:-4]}.bam')
     bai = os.path.join(pathOut, f'{name[:-4]}.bai')
 
-    args = ['samtools', 'sort',
+    cmd = ['samtools', 'sort',
             '-m', '20G',
             '-o', bam,
             '-O', 'bam',
             '-@', ncpu,
             f]
-    print('Running...\n', ' '.join(args))
-    p = subprocess.run(args, capture_output=True)
+    print('Running...\n', ' '.join(cmd))
+    p = subprocess.run(cmd, capture_output=True)
     print('output:\n', p.stdout.decode('utf-8'), '\n')
     print('error:\n', p.stderr.decode('utf-8'), '\n')
 
-    args = ['samtools', 'index',
+    cmd = ['samtools', 'index',
             bam, bai]
-    print('Running...\n', ' '.join(args))
-    p = subprocess.run(args, capture_output=True)
+    print('Running...\n', ' '.join(cmd))
+    p = subprocess.run(cmd, capture_output=True)
     print('output:\n', p.stdout.decode('utf-8'), '\n')
     print('error:\n', p.stderr.decode('utf-8'), '\n')
     
