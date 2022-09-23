@@ -2,7 +2,7 @@ from pathlib import Path
 import argparse
 from pyBioinfo_modules.wrappers.prokka import runProkka
 from multiprocessing import Pool
-from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
+from pyBioinfo_modules.bio_sequences.bio_seq_file_extensions import FNA_EXTENSIONS
 from pyBioinfo_modules.basic.decompress \
     import getStemIfCompressed, getRootAndFiles
 
