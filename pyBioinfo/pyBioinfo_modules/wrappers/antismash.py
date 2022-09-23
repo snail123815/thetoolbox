@@ -9,7 +9,7 @@ from pyBioinfo_modules.wrappers._environment_settings \
     import CONDAEXE, ANTISMASH_ENV, SHELL, getActivateEnvCmd
 from pyBioinfo_modules.basic.decompress \
     import decompFileIfCompressed
-from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
+from pyBioinfo_modules.bio_sequences.bio_seq_file_extensions import FNA_EXTENSIONS
 
 
 def runAntismash(
