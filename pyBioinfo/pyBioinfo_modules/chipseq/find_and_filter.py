@@ -1,8 +1,9 @@
 import numpy.polynomial.polynomial as poly
 import numpy as np
 
-def turning_points(array):
-    ''' turning_points(array) -> min_indices, max_indices
+
+def findPeakTrough(array):
+    ''' findPeakTrough(array) -> min_indices, max_indices
     Finds the turning points within an 1D array and returns the indices of the minimum and
     maximum turning points in two separate lists.
     https://stackoverflow.com/a/48360671/6823079
@@ -35,36 +36,6 @@ def turning_points(array):
             begin = i
             ps = s
     return idx_min, idx_max
-# turning_points
-
-
-def readCoverage():
-    import pickle
-    from os.path import isfile
-
-    coverageFile = '/Users/durand.dc/Desktop/ChIP1839/bamSorted/coverage.txt'
-    coverageDataframeBz2 = '/Users/durand.dc/Desktop/ChIP1839/bamSorted/coverage.pickle.bz2'
-    coverageDataframe = '/Users/durand.dc/Desktop/ChIP1839/bamSorted/coverage.pickle'
-
-    if isfile(coverageDataframe):
-        with open(coverageDataframe, 'rb') as dataFile:
-            coverage = pickle.load(dataFile)
-    elif isfile(coverageDataframeBz2):
-        import bz2
-        with bz2.open(coverageDataframe, 'rb') as dataFile:
-            coverage = pickle.load(dataFile)
-    else:
-        import bz2
-        import pandas as pd
-        coverage = pd.read_csv(coverageFile, delimiter='\t', usecols=[
-                               'pos', 'ChIP-48h', 'ChIP-25h', 'gDNA-25h', 'gDNA-48h'], index_col='pos')
-        with bz2.open(coverageDataframeBz2, 'wb') as dataFile:
-            pickle.dump(coverage, dataFile)
-        with open(coverageDataframe, 'wb') as dataFile:
-            pickle.dump(coverage, dataFile)
-
-    return coverage
-# readCoverage
 
 
 def peakLengthAtLoc(data, series):
@@ -79,11 +50,12 @@ def peakLengthAtLoc(data, series):
     if len(lengthNums) == 1:
         return lengthNums[0]
     return lengthNums
-# peakLengthAtLoc
 
 
 def minMaxPolyfit(x, y, degree=10):
-    """x,y,degree = 10
+    """ Fit a polynomial curve to data and get
+    the turning points (peak and trough) on this curve.
+    x,y,degree = 10
     x,y are list of values"""
     coefs = poly.polyfit(x, y, degree)
     Fit = poly.Polynomial(coefs)
@@ -100,14 +72,13 @@ def minMaxPolyfit(x, y, degree=10):
             else:
                 # this is to find real turning point - tangent angle change
                 yTrend_trend.append(yTrend[index] - yTrend[index - 1])
-    min_indices, max_indices = turning_points(yTrend_trend)
+    min_indices, max_indices = findPeakTrough(yTrend_trend)
     return min_indices, max_indices, Fit
-# minMaxPolyfit
 
 
 def filterFoldEnrichment(peakDF, method=['single', 10]):
     methodIsList = False
-    if type(method) == list:
+    if isinstance(method, list):
         methodIsList = True
         thresh = method[1]
         method = method[0]
@@ -177,10 +148,10 @@ def filterLength(peakDF, method='dist'):
         # gether data for output
         minLength, maxLength = [peakLengthAtLoc(peakDF, indice)
                                 for indice in max_indices if indice >= bondarieMin]
-    elif type(method) == list:
+    elif isinstance(method, list):
         try:
             minLength, maxLength = method
-        except:
+        except BaseException:
             raise Exception(
                 'Method should be [minLength, maxLength] if you do not fillter')
     else:
@@ -218,10 +189,9 @@ def filterLikely(peakDF, method):
             raise Exception(
                 'Threshold error, for peaks, the value should be the bigger the better, set up a big value >=10')
         filtered = peakDF.query('`-log10(pvalue)` >= @thresh')
-        
+
     else:
         raise Exception(
             f'Likely filter failed for this data frame with header\n{peakDF.columns}')
     return filtered
 # filterLikely
-
