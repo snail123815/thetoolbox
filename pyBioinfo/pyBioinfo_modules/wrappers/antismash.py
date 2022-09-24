@@ -1,6 +1,7 @@
 import subprocess
 import logging
 from pathlib import Path
+from pathlib import PurePath
 from typing import Literal
 import shutil
 from datetime import datetime
@@ -10,6 +11,10 @@ from pyBioinfo_modules.wrappers._environment_settings \
 from pyBioinfo_modules.basic.decompress \
     import decompFileIfCompressed
 from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
+
+antismashClusterGbkFileNameTest = 'NNNNNNNNNNNn.region001.gbk'
+clusterGbkGlobTxt = r'*region[0-9][0-9][0-9].gbk'
+assert PurePath(antismashClusterGbkFileNameTest).match(clusterGbkGlobTxt)
 
 
 def runAntismash(
@@ -126,5 +131,3 @@ def runAntismash(
     logging.info(f'Done antiSMASH for {inputFilePath}')
 
     return outdir.resolve()
-
-
