@@ -11,7 +11,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 import shutil
 
-rootPath = Path('/vol/local/MBT-collection')
+rootPath = (Path.home()/'gdata/duc/MBT-collection').resolve()
 
 targetDirs = [
     rootPath / 'MBT-initial-96strains',
@@ -27,7 +27,9 @@ knownSpecies = [
     'Streptomyces',
     'Kitasatospora',
     'Paenibacillus',
-    'Terrbacter'
+    'Terrbacter',
+    'Actinobacteria',
+    'Streptosporangiales'
 ]
 fnaExtensions = ['.fna', '.fasta', '.fa']
 gbkExtensions = ['.gbk', '.gb', '.genbank', '.gbff']
