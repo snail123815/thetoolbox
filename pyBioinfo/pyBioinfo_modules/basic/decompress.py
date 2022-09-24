@@ -30,16 +30,18 @@ def decompressFile(filePath: Path) -> Path:
         case _:
             raise NotImplementedError(
                 f'Decompress {filePath.suffix} file is not supported.')
-    decompress = subprocess.run(
-        f'{prog} -dkf {filePath.resolve()}'.split(' '),
-        capture_output=True, check=True
-    )
     resultFilePath = filePath.with_suffix('')
+    with open(resultFilePath, 'w') as rf:
+        decompress = subprocess.run(
+            [prog, '-dc', filePath.resolve()],
+            stdout=rf,
+            stderr=subprocess.PIPE
+        )   
     if not resultFilePath.exists():
         raise FileNotFoundError('\n'.join([
-            f'Unzip file {filePath} succeed but no output file found:',
+            f'Unzip file {filePath} failed: no output file found:',
             ' '.join(decompress.args),
-            decompress.stderr.decode(), decompress.stdout.decode()
+            decompress.stderr.decode()
         ]))
     return resultFilePath
 
@@ -66,7 +68,7 @@ def decompressToTempTxt(filePath: Path) -> _TemporaryFileWrapper:
                 f'Decompress {filePath.suffix} file is not supported.')
     outTempFile = NamedTemporaryFile()
     with open(outTempFile.name, 'w') as out:
-        subprocess.run([prog, '-dkc', filePath], stdout=out, check=True)
+        subprocess.run([prog, '-dc', filePath], stdout=out, check=True)
     return outTempFile
 
 
