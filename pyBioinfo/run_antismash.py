@@ -68,7 +68,7 @@ ALLOWED_EXTENSIONS = (
 
 outputRoot: Path
 targetFiles: list[Path]
-outputRoot, targetFiles = getRootAndFiles(args.inputFiles)
+outputRoot, targetFiles = getRootAndFiles(args.inputFiles, ALLOWED_EXTENSIONS)
 pathOut = outputRoot.parent / \
     f'{outputRoot.name}_antismash_level{args.completeness}'
 pathOut.mkdir(exist_ok=True)
