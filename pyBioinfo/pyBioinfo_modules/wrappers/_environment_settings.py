@@ -10,6 +10,7 @@ CONDAEXE: Literal['conda', 'mamba', 'micromamba'] = 'micromamba'
 ANTISMASH_ENV: Path | None = Path.home()/'genvs/quasan'
 BUSCO_ENV: Path | None = Path.home()/'genvs/quasan'
 PROKKA_ENV: Path | None = Path.home()/'genvs/quasan'
+MASH_ENV: Path | None = Path.home()/'genvs/phylophlan'
 
 
 def getActivateEnvCmd(condaEnv, condaExe=CONDAEXE, shell=SHELL):
