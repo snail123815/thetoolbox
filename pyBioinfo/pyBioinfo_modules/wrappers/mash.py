@@ -2,6 +2,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal
 import numpy as np
+from tempfile import NamedTemporaryFile
 
 from pyBioinfo_modules.wrappers._environment_settings \
     import CONDAEXE, SHELL, MASH_ENV, withActivateEnvCmd
@@ -22,12 +23,17 @@ def mashSketchFiles(
     Calculates the distance between the query fasta files
     stored in the sketch file by using mash.
     """
+    fileList = NamedTemporaryFile()
+    with open(fileList.name, 'w') as fl:
+        for f in inputFiles:
+            fl.write(f'{f}\n')
     cmd = f"mash sketch -o {output} -k {kmer} -p {ncpu} -s {sketch}"
-    cmd += (' -a ' if molecule == 'protein' else ' ')
-    cmd += ' '.join([str(f) for f in inputFiles])
+    cmd += (' -a' if molecule == 'protein' else '')
+    cmd += f' -l {fileList.name}'
     mashSketchRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
         shell=True, capture_output=True, check=True)
+    fileList.close()
     outputMsh = Path(str(output) + '.msh')
     assert outputMsh.is_file()
     return outputMsh

@@ -99,10 +99,11 @@ def parseClusterGbk(infile: Path, nflank: int = 0) -> ClusterInfo:
     # biopython/Bio/GenBank/__init__.py line 764
     # in class _FeatureConsumer(_BaseGenBankConsumer)
     if " " in organism:
-        organism = "_".join(organism.split(",")[0].split()[:-1])
+        organism = "_".join(organism.split(",")[0].split())
+    organism = re.sub(f'strain', '', organism)
     organism = re.sub(f'[()"]+', '', organism)
     organism = re.sub(f'[\\/]+', '-', organism)
-    organism = re.sub(f'[\\.]+', '_', organism)
+    organism = re.sub(f'[._]+', '_', organism)
 
     return ClusterInfo(
         dnaSeq=record.seq,
@@ -134,12 +135,12 @@ def writeFasta(
     fastaId = header of the cluster dna sequence
     """
     regionAndNumber = findClusterNumber(infile)
-    fromSequence = infile.name.split(regionAndNumber)[0]
+    fromSequence = infile.name.split(regionAndNumber)[0][:-1]
     fileName = (seqstype + gcProducts if 'HG' in seqstype else seqstype)
-    fileName += f"-{fromSequence}.fasta"
+    fileName += f"-{fromSequence}"
     fastaId = f"{organism}|{fromSequence}|{seqstype}--Region{regionAndNumber}" \
         + f"--Entryname={gcProducts}"
-    outfile = outdir / fileName
+    outfile = (outdir / fileName).with_suffix('.fasta')
     SeqIO.write(SeqRecord(sequence), outfile, 'fasta')
     assert outfile.is_file()
     return outfile, fromSequence, fastaId
@@ -166,7 +167,7 @@ def main():
                     glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
     clusterInfos: list[ClusterInfo] = [
         parseClusterGbk(gbk) for gbk
-        in tqdm(gbks, desc='Reading gbk files...')]
+        in tqdm(gbks, desc='Reading gbk files:')]
     fastaDir = TemporaryDirectory()
     mashDir = TemporaryDirectory()
     try:
