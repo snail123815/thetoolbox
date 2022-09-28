@@ -1,11 +1,17 @@
+import argparse
 from pathlib import Path
+from turtle import distance
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation
 from Bio.SeqRecord import SeqRecord
 import re
 from typing import Literal, TypedDict
-from pyBioinfo_modules.wrappers.antismash import findClusterNumber
+from pyBioinfo_modules.wrappers.antismash \
+    import findClusterNumber, clusterGbkGlobTxt
+from pyBioinfo_modules.wrappers.mash \
+    import calculate_medoid, mashSketchFiles, mashDistance
+from tempfile import TemporaryDirectory
 
 
 class ClusterInfo(TypedDict):
@@ -14,9 +20,10 @@ class ClusterInfo(TypedDict):
     gcProducts: str
     organism: str
     coreRelativeLocs: list[FeatureLocation]
+    gbkFilePath: Path
 
 
-def parseClusterGbk(infile: Path, nflank: int) -> ClusterInfo:
+def parseClusterGbk(infile: Path, nflank: int = 0) -> ClusterInfo:
     """Parses the genbank files for DNA, protein, cluster, organism
     [Rewrote of parsegbkcluster() from BiG-MAP]
     parameters
@@ -100,11 +107,12 @@ def parseClusterGbk(infile: Path, nflank: int) -> ClusterInfo:
         joinProteins=Seq(''.join(proteins)),
         gcProducts=":".join(gcProducts),
         organism=organism,
-        coreRelativeLocs=coreRelativeLocs
+        coreRelativeLocs=coreRelativeLocs,
+        gbkFilePath=infile
     )
 
 
-def writefasta(
+def writeFasta(
     sequence: Seq,
     seqstype: Literal['GC_PROT', 'GC_DNA', 'HG_PROT', 'HG_DNA'],
     gcProducts: str,
@@ -133,3 +141,55 @@ def writefasta(
     SeqIO.write(SeqRecord(sequence), outfile, 'fasta')
     assert outfile.is_file()
     return outfile, fromSequence, fastaId
+
+
+def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('p', type=Path, help='Input dir')
+
+    args = parser.parse_args()
+    inputPath: Path = args.p
+
+    # 1. get gbk files from input path
+    # 2. get cluster info for each gbk files
+    # 2.1 print protein sequences to fasta
+    # 3. make sketch and calculate distance
+    # 4. get medoid from distance
+    # proceed line 1088 or BiG-MAP.family.py
+
+    gbks = inputPath.glob("**/" + clusterGbkGlobTxt)
+    clusterInfos: list[ClusterInfo] = [parseClusterGbk(gbk) for gbk in gbks]
+    fastaDir = TemporaryDirectory()
+    mashDir = TemporaryDirectory()
+    try:
+        fastaDirPath = Path(fastaDir.name)
+        mashDirPath = Path(mashDir.name)
+        for ci in clusterInfos:
+            writeFasta(
+                ci['joinProteins'],
+                'GC_PROT',
+                ci['gcProducts'],
+                ci['organism'],
+                ci['gbkFilePath'],
+                fastaDirPath
+            )
+        sketchFile = mashDirPath / 'GC_PROT.msh'
+        mashSketchFiles(
+            fastaDirPath.glob('GC_PROT*.fasta'),
+            sketchFile.with_suffix(''),
+            kmer=16,
+            sketch=5000,
+            molecule='protein'
+        )
+        distanceTable = mashDirPath / 'mash_output_GC.tab'
+        mashDistance(sketchFile, distanceTable)
+        dict_medoids, family_distance_matrice = \
+            calculate_medoid(distanceTable, 0.8)
+        print('finish') # break point
+    finally:
+        fastaDir.cleanup()
+        mashDir.cleanup()
+
+
+if __name__ == "__main__":
+    main()
