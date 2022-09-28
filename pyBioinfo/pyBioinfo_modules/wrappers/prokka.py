@@ -4,7 +4,7 @@ from typing import Literal
 from datetime import datetime
 import os
 from pyBioinfo_modules.wrappers._environment_settings import \
-    SHELL, CONDAEXE, PROKKA_ENV, getActivateEnvCmd
+    SHELL, CONDAEXE, PROKKA_ENV, withActivateEnvCmd
 
 
 
@@ -17,7 +17,7 @@ def runProkka(
     species: str | None = None,
     strain: str | None = None,
     locustag: str | None = None,
-    condaEnv: Path | None = PROKKA_ENV,
+    prokkaEnv: Path | None = PROKKA_ENV,
     condaExe: str = CONDAEXE,
     cpu: int = 4,
     shell: Literal['bash', 'zsh'] = SHELL,
@@ -66,7 +66,7 @@ def runProkka(
     if not silent:
         print(cmd)
 
-    cmd = ' && '.join([getActivateEnvCmd(condaEnv, condaExe, shell), cmd])
+    cmd = withActivateEnvCmd(cmd, prokkaEnv, condaExe, shell)
     if dry:
         print(cmd)
     else:

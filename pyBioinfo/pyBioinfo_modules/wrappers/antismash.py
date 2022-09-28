@@ -7,7 +7,7 @@ import shutil
 from datetime import datetime
 import os
 from pyBioinfo_modules.wrappers._environment_settings \
-    import CONDAEXE, ANTISMASH_ENV, SHELL, getActivateEnvCmd
+    import CONDAEXE, ANTISMASH_ENV, SHELL, withActivateEnvCmd
 from pyBioinfo_modules.basic.decompress \
     import decompFileIfCompressed
 from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import FNA_EXTENSIONS
@@ -123,10 +123,7 @@ def runAntismash(
         if not silent:
             logging.info(cmd)
 
-        cmd = ' && '.join([
-            getActivateEnvCmd(condaEnv, condaExe, shell),
-            cmd
-        ])
+        cmd = withActivateEnvCmd(cmd, condaEnv, condaExe, shell)
 
         if dry:
             logging.info(cmd)

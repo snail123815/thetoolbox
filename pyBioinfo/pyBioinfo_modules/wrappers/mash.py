@@ -4,7 +4,7 @@ from typing import Literal
 import numpy as np
 
 from pyBioinfo_modules.wrappers._environment_settings \
-    import MASH_ENV, getActivateEnvCmd
+    import CONDAEXE, SHELL, MASH_ENV, withActivateEnvCmd
 
 
 def mashSketchFiles(
@@ -13,6 +13,9 @@ def mashSketchFiles(
     kmer: int,
     sketch: int,
     ncpu: int = 1,
+    mashEnv=MASH_ENV,
+    condaExe=CONDAEXE,
+    shell=SHELL,
     molecule: Literal['DNA', 'protein'] = "DNA"
 ) -> Path:
     """
@@ -23,7 +26,7 @@ def mashSketchFiles(
     cmd += (' -a' if molecule == 'protein' else '')
     cmd += ' '.join([str(f) for f in inputFiles])
     mashSketchRun = subprocess.run(
-        getActivateEnvCmd(MASH_ENV) + cmd,
+        withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
         shell=True, capture_output=True, check=True)
     outputMsh = Path(str(output) + '.msh')
     assert outputMsh.is_file()
@@ -33,6 +36,9 @@ def mashSketchFiles(
 def mashDistance(
     inputMsh: Path,
     outputFile: Path,
+    mashEnv=MASH_ENV,
+    condaExe=CONDAEXE,
+    shell=SHELL,
 ) -> Path:
     """
     Calculates the distance between the query fasta files
@@ -51,9 +57,8 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
     """
     cmd = f"mash dist {inputMsh} {inputMsh} > {outputFile}"
     mashDistRun = subprocess.run(
-        getActivateEnvCmd(MASH_ENV) + cmd,
-        shell=True, check=True
-    )
+        withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
+        shell=True, check=True)
     assert outputFile.exists
     return outputFile
 
@@ -63,11 +68,10 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
 
 
 def calculate_medoid(
-    outdir: Path,
-    cutOff: float,  # default 0.8
     inputDistanceTablePath: Path,  # output file (return) of mashDistance()
-    med={},
-) -> tuple[GCFs, distance_matrix]:
+    cutOff: float,  # default 0.8
+    med: dict[str, list[str]] = {}
+) -> tuple[dict[str, list[str]], dict[str, list[float]]]:
     """
     calculates the GCFs based on similarity threshold
     parameters and calculates the medoid of that GCF
@@ -81,22 +85,25 @@ def calculate_medoid(
     dict_medoids = {fasta file of medoid: similar fasta files}
     """
     # Parse the input into a dictionary of gene families
-    family = {}
-    # family dict, key = family members, values are family names
+    family: dict[str, str] = {}
+    # family dict, key = family members, values = family names
     familyFiltered = {}
-    family_members = {}
-    family_distance_matrices = {}
-    dict_medoids = med
+    family_members: dict[str, list[str]] = {}
+    # family_members dict, key = family name, values = list of members
+    family_distance_matrices: dict[str, list[float]] = {}
+    dict_medoids: dict[str, list[str]] = med
     with inputDistanceTablePath.open('r') as input:
         for line in input:
             if line.startswith('#') or line.strip() == "":
                 continue
             # Split into tab-separated elements
-            refId, queryId, distance, pValue, nHashesStr \
+            refId, queryId, distanceStr, pValueStr, nHashesStr \
                 = line.strip().split('\t')
             sharedNhashes, totalNhashes = (int(n) for n in
                                            nHashesStr.split("/"))
             shareRatio = sharedNhashes / totalNhashes
+            distance = float(distanceStr)
+            pValue = float(pValueStr)
             # Look up the family of the first gene
             # Each family is named by the first gene of the family
             if queryId in family.keys():
@@ -126,7 +133,7 @@ def calculate_medoid(
                             family_members[familyName],
                             queryId,
                             refId,
-                            float(distance)
+                            distance
                         )
                     else:
                         # gene is above cut off or doesn't belong to the family
@@ -144,7 +151,7 @@ def calculate_medoid(
                         family_members[gene1_family_name],
                         refId,
                         refId,
-                        float(distance)
+                        distance
                     )
             else:
                 # There is some overlap, and we want refId also in this family
@@ -154,7 +161,7 @@ def calculate_medoid(
                     family_members[familyName],
                     queryId,
                     refId,
-                    float(distance)
+                    distance
                 )
     # For each family: Build a distance matrix, and then work out the medoid
     for familyName in familyFiltered.keys():
@@ -193,7 +200,7 @@ def add_to_distance_matrix(distance_matrix, idList,
     return ()
 
 
-def add_new_gene(distance_matrix, idList, gene):
+def add_new_gene(distance_matrix, idList, id) -> int:
     """
     Adds a distance matrix
     ----------
@@ -201,19 +208,19 @@ def add_new_gene(distance_matrix, idList, gene):
         {fasta file name: distance matrix}
     idList
         list, fasta file name
-    gene
+    id
         fasta file name
     returns
     ----------
-    gene_list.index(gene)
-        float, index number of the gene
+    idList.index(gene)
+        int, index number of the gene
     """
-    if gene not in idList:
+    if id not in idList:
         # Add to list
-        idList.append(gene)
-        idList.index(gene)
+        idList.append(id)
+        idList.index(id)
         # Extend distance matrix: One new row, one new column
         for row in distance_matrix:
             row.append(0)
         distance_matrix.append([0] * len(idList))
-    return (idList.index(gene))
+    return idList.index(id)
