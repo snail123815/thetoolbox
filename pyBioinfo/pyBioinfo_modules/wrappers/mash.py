@@ -23,7 +23,7 @@ def mashSketchFiles(
     stored in the sketch file by using mash.
     """
     cmd = f"mash sketch -o {output} -k {kmer} -p {ncpu} -s {sketch}"
-    cmd += (' -a' if molecule == 'protein' else '')
+    cmd += (' -a ' if molecule == 'protein' else ' ')
     cmd += ' '.join([str(f) for f in inputFiles])
     mashSketchRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),

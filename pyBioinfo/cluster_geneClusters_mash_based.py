@@ -1,4 +1,6 @@
 import argparse
+from glob import glob
+from tqdm import tqdm
 from pathlib import Path
 from turtle import distance
 from Bio import SeqIO
@@ -157,14 +159,20 @@ def main():
     # 4. get medoid from distance
     # proceed line 1088 or BiG-MAP.family.py
 
-    gbks = inputPath.glob("**/" + clusterGbkGlobTxt)
-    clusterInfos: list[ClusterInfo] = [parseClusterGbk(gbk) for gbk in gbks]
+    gbks = list(inputPath.glob(clusterGbkGlobTxt))
+    for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
+                  desc=(f'Gathering gbk files from {inputPath.name}')):
+        gbks.extend(Path(gbk) for gbk in
+                    glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
+    clusterInfos: list[ClusterInfo] = [
+        parseClusterGbk(gbk) for gbk
+        in tqdm(gbks, desc='Reading gbk files...')]
     fastaDir = TemporaryDirectory()
     mashDir = TemporaryDirectory()
     try:
         fastaDirPath = Path(fastaDir.name)
         mashDirPath = Path(mashDir.name)
-        for ci in clusterInfos:
+        for ci in tqdm(clusterInfos, desc='Writing protein fasta files...'):
             writeFasta(
                 ci['joinProteins'],
                 'GC_PROT',
@@ -174,6 +182,7 @@ def main():
                 fastaDirPath
             )
         sketchFile = mashDirPath / 'GC_PROT.msh'
+        print('Making sketch...')
         mashSketchFiles(
             fastaDirPath.glob('GC_PROT*.fasta'),
             sketchFile.with_suffix(''),
@@ -182,10 +191,12 @@ def main():
             molecule='protein'
         )
         distanceTable = mashDirPath / 'mash_output_GC.tab'
+        print("Calculationg distance...")
         mashDistance(sketchFile, distanceTable)
+        print('Gather families and calculating medoid...')
         dict_medoids, family_distance_matrice = \
             calculate_medoid(distanceTable, 0.8)
-        print('finish') # break point
+        print('finish')  # break point
     finally:
         fastaDir.cleanup()
         mashDir.cleanup()
