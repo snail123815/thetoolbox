@@ -137,10 +137,10 @@ def writeFasta(
     regionAndNumber = findClusterNumber(infile)
     fromSequence = infile.name.split(regionAndNumber)[0][:-1]
     fileName = (seqstype + gcProducts if 'HG' in seqstype else seqstype)
-    fileName += f"-{fromSequence}"
+    fileName += f"-{fromSequence}-{regionAndNumber}"
     fastaId = f"{organism}|{fromSequence}|{seqstype}--Region{regionAndNumber}" \
         + f"--Entryname={gcProducts}"
-    outfile = (outdir / fileName).with_suffix('.fasta')
+    outfile = outdir / (fileName + '.fasta')
     SeqIO.write(SeqRecord(sequence), outfile, 'fasta')
     assert outfile.is_file()
     return outfile, fromSequence, fastaId

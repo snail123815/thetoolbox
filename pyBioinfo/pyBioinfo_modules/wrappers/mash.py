@@ -26,7 +26,7 @@ def mashSketchFiles(
     fileList = NamedTemporaryFile()
     with open(fileList.name, 'w') as fl:
         for f in inputFiles:
-            fl.write(f'{f}\n')
+            fl.write(f'{f.resolve()}\n')
     cmd = f"mash sketch -o {output} -k {kmer} -p {ncpu} -s {sketch}"
     cmd += (' -a' if molecule == 'protein' else '')
     cmd += f' -l {fileList.name}'
