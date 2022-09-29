@@ -1,4 +1,5 @@
 import argparse
+from multiprocessing import Pool
 from glob import glob
 from tqdm import tqdm
 from pathlib import Path
@@ -149,6 +150,7 @@ def writeFasta(
 def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('p', type=Path, help='Input dir')
+    parser.add_argument('--cpus', type=int, help='Processes number', default=4)
 
     args = parser.parse_args()
     inputPath: Path = args.p
@@ -165,23 +167,39 @@ def main():
                   desc=(f'Gathering gbk files from {inputPath.name}')):
         gbks.extend(Path(gbk) for gbk in
                     glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
-    clusterInfos: list[ClusterInfo] = [
-        parseClusterGbk(gbk) for gbk
-        in tqdm(gbks, desc='Reading gbk files:')]
+
+    with Pool(args.cpus) as readGbkPool:
+        results = [
+            readGbkPool.apply_async(parseClusterGbk, (gbk,))
+            for gbk in gbks
+        ]
+        clusterInfos: list[ClusterInfo] = [
+            r.get() for r in tqdm(results, desc='Reading gbk files:')
+        ]
+
     fastaDir = TemporaryDirectory()
     mashDir = TemporaryDirectory()
     try:
         fastaDirPath = Path(fastaDir.name)
         mashDirPath = Path(mashDir.name)
-        for ci in tqdm(clusterInfos, desc='Writing protein fasta files...'):
-            writeFasta(
-                ci['joinProteins'],
-                'GC_PROT',
-                ci['gcProducts'],
-                ci['organism'],
-                ci['gbkFilePath'],
-                fastaDirPath
-            )
+        with Pool(args.cpus) as writeFastaPool:
+            results = [
+                writeFastaPool.apply_async(
+                    writeFasta,
+                    (
+                        ci['joinProteins'],
+                        'GC_PROT',
+                        ci['gcProducts'],
+                        ci['organism'],
+                        ci['gbkFilePath'],
+                        fastaDirPath
+                    )
+                ) for ci in clusterInfos
+            ]
+            [r.get() for r in tqdm(
+                results,
+                desc='Writing protein fasta files...'
+            )]
         sketchFile = mashDirPath / 'GC_PROT.msh'
         print('Making sketch...')
         mashSketchFiles(
@@ -189,11 +207,16 @@ def main():
             sketchFile.with_suffix(''),
             kmer=16,
             sketch=5000,
+            nthreads=args.cpus,
             molecule='protein'
         )
         distanceTable = mashDirPath / 'mash_output_GC.tab'
         print("Calculationg distance...")
-        mashDistance(sketchFile, distanceTable)
+        mashDistance(
+            sketchFile,
+            distanceTable,
+            nthreads=args.cpus,
+        )
         print('Gather families and calculating medoid...')
         dict_medoids, family_distance_matrice = \
             calculate_medoid(distanceTable, 0.8)

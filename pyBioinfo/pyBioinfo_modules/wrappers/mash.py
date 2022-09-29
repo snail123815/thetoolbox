@@ -13,7 +13,7 @@ def mashSketchFiles(
     output: Path,
     kmer: int,
     sketch: int,
-    ncpu: int = 1,
+    nthreads: int = 1,
     mashEnv=MASH_ENV,
     condaExe=CONDAEXE,
     shell=SHELL,
@@ -27,7 +27,7 @@ def mashSketchFiles(
     with open(fileList.name, 'w') as fl:
         for f in inputFiles:
             fl.write(f'{f.resolve()}\n')
-    cmd = f"mash sketch -o {output} -k {kmer} -p {ncpu} -s {sketch}"
+    cmd = f"mash sketch -o {output} -k {kmer} -p {nthreads} -s {sketch}"
     cmd += (' -a' if molecule == 'protein' else '')
     cmd += f' -l {fileList.name}'
     mashSketchRun = subprocess.run(
@@ -42,6 +42,7 @@ def mashSketchFiles(
 def mashDistance(
     inputMsh: Path,
     outputFile: Path,
+    nthreads: int = 1,
     mashEnv=MASH_ENV,
     condaExe=CONDAEXE,
     shell=SHELL,
@@ -61,7 +62,7 @@ genome1.fna   genome3.fna  0         0        1000/1000
 genome2.fna   genome3.fna  0.022276  0        456/1000
     ----------
     """
-    cmd = f"mash dist {inputMsh} {inputMsh} > {outputFile}"
+    cmd = f"mash dist -p {nthreads} {inputMsh} {inputMsh} > {outputFile}"
     mashDistRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
         shell=True, check=True)
