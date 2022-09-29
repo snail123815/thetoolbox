@@ -244,18 +244,28 @@ def main():
                 familyGbksDirs.append(targetDir)
 
         args.outputPath.mkdir(exist_ok=True)
-        for dir in tqdm(familyGbksDirs, desc='BiGSCAPE runs'):
-            runBigscape(
-                dir,
-                args.outputPath / dir.name,
-                cpus=args.cpus,
-                cutoffs=[0.2, ]
-            )
+        cpuDist = (1,1)
+        with Pool(round(args.cpus * cpuDist[0]/sum(cpuDist))) as bigscapePool:
+            results = [
+                bigscapePool.apply_async(
+                    runBigscape,
+                    (dir, args.outputPath / dir.name),
+                    kwds={
+                        'cpus': round(args.cpus * cpuDist[1]/sum(cpuDist)),
+                        'cutoffs': [0.2, ]
+                    }
+                ) for dir in familyGbksDirs
+            ]
+            bigscapeResults = [
+                r.get() for r
+                in tqdm(results, desc='BiGSCAPE runs')
+            ]
 
         print('finish')  # break point
     finally:
         fastaDir.cleanup()
         mashDir.cleanup()
+        gbkFamiliesDir.cleanup()
 
 
 if __name__ == "__main__":
