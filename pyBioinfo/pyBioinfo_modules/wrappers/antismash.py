@@ -14,7 +14,7 @@ from pyBioinfo_modules.bioSequences.bio_seq_file_extensions import FNA_EXTENSION
 import re
 
 
-def findClusterNumber(file: Path, numberOnly: bool = False) -> str | None:
+def findClusterNumberStr(file: Path, numberOnly: bool = False) -> str | None:
     match = clusterNumberPattern.search(file.name)
     if match:
         if not numberOnly:
@@ -29,7 +29,7 @@ antismashClusterGbkFileNameTest = 'NNNNNNNNNNNn.region001.gbk'
 clusterGbkGlobTxt = r'*region[0-9][0-9][0-9].gbk'
 assert PurePath(antismashClusterGbkFileNameTest).match(clusterGbkGlobTxt)
 clusterNumberPattern = re.compile(r"\.region[0-9]{3}\.gbk$")
-assert findClusterNumber(Path(antismashClusterGbkFileNameTest)) == 'region001'
+assert findClusterNumberStr(Path(antismashClusterGbkFileNameTest)) == 'region001'
 
 
 def runAntismash(

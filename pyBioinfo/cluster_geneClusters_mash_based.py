@@ -1,4 +1,5 @@
 import argparse
+import shutil
 from multiprocessing import Pool
 from glob import glob
 from tqdm import tqdm
@@ -11,7 +12,7 @@ from Bio.SeqRecord import SeqRecord
 import re
 from typing import Literal, TypedDict
 from pyBioinfo_modules.wrappers.antismash \
-    import findClusterNumber, clusterGbkGlobTxt
+    import findClusterNumberStr, clusterGbkGlobTxt
 from pyBioinfo_modules.wrappers.mash \
     import calculate_medoid, mashSketchFiles, mashDistance
 from tempfile import TemporaryDirectory
@@ -123,7 +124,7 @@ def writeFasta(
     organism: str,
     infile: Path,
     outdir: Path
-) -> tuple[Path, str, str]:
+) -> tuple[Path, Path, str, str]:
     """Writes the fasta file for each sequence
     sequences(dnaSeq or joinProteins), gcProducts, organism = output of parseClusterGbk()
     infile = 000001.1.region001.gbk (no consecutive dot ... in file name)
@@ -135,7 +136,7 @@ def writeFasta(
     fromSequence = ID for the input organism genome
     fastaId = header of the cluster dna sequence
     """
-    regionAndNumber = findClusterNumber(infile)
+    regionAndNumber = findClusterNumberStr(infile)
     fromSequence = infile.name.split(regionAndNumber)[0][:-1]
     fileName = (seqstype + gcProducts if 'HG' in seqstype else seqstype)
     fileName += f"-{fromSequence}-{regionAndNumber}"
@@ -144,7 +145,7 @@ def writeFasta(
     outfile = outdir / (fileName + '.fasta')
     SeqIO.write(SeqRecord(sequence), outfile, 'fasta')
     assert outfile.is_file()
-    return outfile, fromSequence, fastaId
+    return infile, outfile, fromSequence, fastaId
 
 
 def main():
@@ -160,7 +161,8 @@ def main():
     # 2.1 print protein sequences to fasta
     # 3. make sketch and calculate distance
     # 4. get medoid from distance
-    # proceed line 1088 or BiG-MAP.family.py
+    # 5. move gbk files together for BiG-SCAPE
+    # 6. run BiG-SCAPE
 
     gbks = list(inputPath.glob(clusterGbkGlobTxt))
     for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
@@ -174,14 +176,16 @@ def main():
             for gbk in gbks
         ]
         clusterInfos: list[ClusterInfo] = [
-            r.get() for r in tqdm(results, desc='Reading gbk files:')
+            r.get() for r in tqdm(results, desc='Reading gbk files')
         ]
 
     fastaDir = TemporaryDirectory()
     mashDir = TemporaryDirectory()
+    gbkFamiliesDir = TemporaryDirectory()
     try:
         fastaDirPath = Path(fastaDir.name)
         mashDirPath = Path(mashDir.name)
+        gbkFamiliesDirPath = Path(gbkFamiliesDir.name)
         with Pool(args.cpus) as writeFastaPool:
             results = [
                 writeFastaPool.apply_async(
@@ -196,10 +200,11 @@ def main():
                     )
                 ) for ci in clusterInfos
             ]
-            [r.get() for r in tqdm(
+            fastaReturns = [r.get() for r in tqdm(
                 results,
                 desc='Writing protein fasta files...'
             )]
+        fastaToGbk = {str(ret[1]): ret[0] for ret in fastaReturns}
         sketchFile = mashDirPath / 'GC_PROT.msh'
         print('Making sketch...')
         mashSketchFiles(
@@ -220,6 +225,18 @@ def main():
         print('Gather families and calculating medoid...')
         dict_medoids, family_distance_matrice = \
             calculate_medoid(distanceTable, 0.8)
+
+        for fasta, members in dict_medoids.items():
+            if len(members) > 1:
+                assert fasta in members
+                name =  Path(fasta).with_suffix('').name
+                targetDir = gbkFamiliesDirPath / name
+                targetDir.mkdir(exist_ok=True)
+                for m in members:
+                    gbk = fastaToGbk[m]
+                    target = targetDir / gbk.name
+                    target.symlink_to(gbk.resolve())
+
         print('finish')  # break point
     finally:
         fastaDir.cleanup()
