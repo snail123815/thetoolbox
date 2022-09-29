@@ -11,6 +11,8 @@ ANTISMASH_ENV: Path | None = Path.home() / 'genvs/quasan'
 BUSCO_ENV: Path | None = Path.home() / 'genvs/quasan'
 PROKKA_ENV: Path | None = Path.home() / 'genvs/quasan'
 MASH_ENV: Path | None = Path.home() / 'genvs/phylophlan'
+BIGSCAPE_ENV: Path | None = Path.home() / 'genvs/bigscape'
+PFAM_DB: Path = Path.home() / 'dbMisc/antismash_databases/pfam/34.0'
 
 
 def withActivateEnvCmd(cmd: str, condaEnv: Path | None = None,

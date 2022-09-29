@@ -15,6 +15,8 @@ from pyBioinfo_modules.wrappers.antismash \
     import findClusterNumberStr, clusterGbkGlobTxt
 from pyBioinfo_modules.wrappers.mash \
     import calculate_medoid, mashSketchFiles, mashDistance
+from pyBioinfo_modules.wrappers.bigscape \
+    import runBigscape
 from tempfile import TemporaryDirectory
 
 
@@ -152,6 +154,8 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('p', type=Path, help='Input dir')
     parser.add_argument('--cpus', type=int, help='Processes number', default=4)
+    parser.add_argument('--outputPath', type=Path, help='Bigscape results',
+                        required=True)
 
     args = parser.parse_args()
     inputPath: Path = args.p
@@ -226,16 +230,27 @@ def main():
         dict_medoids, family_distance_matrice = \
             calculate_medoid(distanceTable, 0.8)
 
+        familyGbksDirs = []
         for fasta, members in dict_medoids.items():
             if len(members) > 1:
                 assert fasta in members
-                name =  Path(fasta).with_suffix('').name
+                name = Path(fasta).with_suffix('').name
                 targetDir = gbkFamiliesDirPath / name
                 targetDir.mkdir(exist_ok=True)
                 for m in members:
                     gbk = fastaToGbk[m]
                     target = targetDir / gbk.name
                     target.symlink_to(gbk.resolve())
+                familyGbksDirs.append(targetDir)
+
+        args.outputPath.mkdir(exist_ok=True)
+        for dir in tqdm(familyGbksDirs, desc='BiGSCAPE runs'):
+            runBigscape(
+                dir,
+                args.outputPath / dir.name,
+                cpus=args.cpus,
+                cutoffs=[0.2, ]
+            )
 
         print('finish')  # break point
     finally:
