@@ -4,7 +4,7 @@ import subprocess
 from pathlib import Path
 from typing import Literal
 from pyBioinfo_modules.wrappers._environment_settings import \
-    SHELL, CONDAEXE, BUSCO_ENV, getActivateEnvCmd
+    SHELL, CONDAEXE, BUSCO_ENV, withActivateEnvCmd
 
 
 def runBusco(
@@ -18,19 +18,14 @@ def runBusco(
     cpu: int = 4
 ) -> Path:
 
-    cmd = (
-        f'busco --auto-lineage-prok -m prot -f -c {cpu}'
-        + f' -i {targetProteome}'
-        + f' --out_path {outPath}'
-        + f' -o {outName}'
-    )
+    cmd = (f'busco --auto-lineage-prok -m prot -f -c {cpu}'
+           + f' -i {targetProteome}'
+           + f' --out_path {outPath}'
+           + f' -o {outName}')
     if not silent:
         print(cmd)
 
-    cmd = ' && '.join([
-        getActivateEnvCmd(condaEnv, condaExe, shell),
-        cmd
-    ])
+    cmd = withActivateEnvCmd(cmd, condaEnv, condaExe, shell)
 
     commandResult = subprocess.run(
         cmd, capture_output=True, shell=True,
