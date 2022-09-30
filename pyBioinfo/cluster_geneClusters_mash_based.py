@@ -75,27 +75,28 @@ def parseClusterGbk(infile: Path, nflank: int = 0) -> ClusterInfo:
             except KeyError:
                 pass
 
-    if cdsIndexs.index(min(coreIndexs)) - nflank < 0 or \
-            cdsIndexs.index(max(coreIndexs)) + nflank + 1 > len(cdsIndexs):
-        print(
-            "!!!flank_genes (-f) is higher than the number of flanking " +
-            f"genes in the cluster of file: {infile}, " +
-            "using whole gene cluster instead!!!"
-        )
-    if nflank == 0:
-        coreRelativeLocs = [
-            record.features[i].location for i in coreIndexs]
-    else:
-        if cdsIndexs.index(min(coreIndexs)) - nflank >= 0:
-            core_region = cdsIndexs[
-                cdsIndexs.index(min(coreIndexs)) -
-                nflank:cdsIndexs.index(max(coreIndexs)) + nflank + 1
-            ]
+    if len(coreIndexs) > 0:
+        if cdsIndexs.index(min(coreIndexs)) - nflank < 0 or \
+                cdsIndexs.index(max(coreIndexs)) + nflank + 1 > len(cdsIndexs):
+            print(
+                "!!!flank_genes (-f) is higher than the number of flanking " +
+                f"genes in the cluster of file: {infile}, " +
+                "using whole gene cluster instead!!!"
+            )
+        if nflank == 0:
+            coreRelativeLocs = [
+                record.features[i].location for i in coreIndexs]
         else:
-            core_region = cdsIndexs[0:cdsIndexs.index(
-                max(coreIndexs)) + nflank + 1]
-        coreRelativeLocs = [
-            record.features[i].location for i in core_region]
+            if cdsIndexs.index(min(coreIndexs)) - nflank >= 0:
+                core_region = cdsIndexs[
+                    cdsIndexs.index(min(coreIndexs)) -
+                    nflank:cdsIndexs.index(max(coreIndexs)) + nflank + 1
+                ]
+            else:
+                core_region = cdsIndexs[0:cdsIndexs.index(
+                    max(coreIndexs)) + nflank + 1]
+            coreRelativeLocs = [
+                record.features[i].location for i in core_region]
 
     organism = record.description
     # Parsing organism name
@@ -244,14 +245,14 @@ def main():
                 familyGbksDirs.append(targetDir)
 
         args.outputPath.mkdir(exist_ok=True)
-        cpuDist = (1,1)
-        with Pool(round(args.cpus * cpuDist[0]/sum(cpuDist))) as bigscapePool:
+        cpuDist = (1, 1)
+        with Pool(round(args.cpus * cpuDist[0] / sum(cpuDist))) as bigscapePool:
             results = [
                 bigscapePool.apply_async(
                     runBigscape,
                     (dir, args.outputPath / dir.name),
                     kwds={
-                        'cpus': round(args.cpus * cpuDist[1]/sum(cpuDist)),
+                        'cpus': round(args.cpus * cpuDist[1] / sum(cpuDist)),
                         'cutoffs': [0.2, ]
                     }
                 ) for dir in familyGbksDirs
