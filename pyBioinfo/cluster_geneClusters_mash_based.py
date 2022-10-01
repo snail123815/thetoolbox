@@ -178,11 +178,11 @@ def main():
         proteinFastaDir.mkdir(exist_ok=True)
         proteinMashDir.mkdir(exist_ok=True)
         gbkFamiliesDir.mkdir(exist_ok=True)
+    sketchFile = proteinMashDir / 'GC_PROT.msh'
+    distanceTableFile = proteinMashDir / 'mash_output_GC.tab'
+    mashTableFinishedFlagFile = proteinMashDir / 'distFinished'
 
     try:
-        sketchFile = proteinMashDir / 'GC_PROT.msh'
-        distanceTable = proteinMashDir / 'mash_output_GC.tab'
-        mashTableFinishedFlagFile = proteinMashDir / 'distFinished'
         gbks = list(inputPath.glob(clusterGbkGlobTxt))
         for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
                       desc=(f'Gathering gbk files from {inputPath.name}')):
@@ -219,15 +219,15 @@ def main():
             print("Calculationg distance...")
             mashDistance(
                 sketchFile,
-                distanceTable,
+                distanceTableFile,
                 nthreads=args.cpus,
             )
-            assert distanceTable.exists()
+            assert distanceTableFile.exists()
             mashTableFinishedFlagFile.touch()
 
         print('Gather families and calculating medoid...')
         dict_medoids, family_distance_matrice = \
-            calculate_medoid(distanceTable, 0.8)
+            calculate_medoid(distanceTableFile, 0.8)
 
         familyGbksDirs = []
         for name, members in dict_medoids.items():
