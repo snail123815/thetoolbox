@@ -5,13 +5,13 @@ from typing import cast
 from pyBioinfo_modules.wrappers.prokka import runProkka
 from pyBioinfo_modules.wrappers.antismash import runAntismash
 from pyBioinfo_modules.basic.decompress import decompFileIfCompressed
-from pyBioinfo_modules.bioSequences.protein_from_gbk import getFaaFromGbk
-from pyBioinfo_modules.bioSequences.gbk_to_gff import gbkToGff
+from pyBioinfo_modules.bio_sequences.protein_from_gbk import getFaaFromGbk
+from pyBioinfo_modules.bio_sequences.gbk_to_gff import gbkToGff
 from tqdm import tqdm
 from multiprocessing import Pool
 import shutil
 
-rootPath = (Path.home()/'gdata/duc/MBT-collection').resolve()
+rootPath = (Path.home() / 'gdata/duc/MBT-collection').resolve()
 
 targetDirs = [
     rootPath / 'MBT-initial-96strains',
@@ -200,7 +200,7 @@ for strainName in strainNamesAll:
                     if sn.startswith(prefix):
                         print(f'{sn} removed because it is a duplicate of '
                               + f'{strainName}')
-                        del(strainsInfo[sn])
+                        del (strainsInfo[sn])
 
 noAssemblyStrains = [strain for strain in strainsInfo if
                      strainsInfo[strain]['fnaPath'] is None]
@@ -230,7 +230,7 @@ if len(noAnnotationStrains) > 0:
                 species=strainNameSplits[1],
                 strain='_'.join(strainNameSplits[2:]),
                 locustag='_'.join(strainNameSplits[2:]),
-                condaEnv=Path('~/genvs/quasan'),
+                prokkaEnv=Path('~/genvs/quasan'),
                 shell='zsh',
                 cpu=16,
                 output=strainsInfo[strain]['rootPath']
@@ -289,19 +289,19 @@ for strain, strainPaths in strainsInfo.items():
     toFaa = collectionFaaDir / f'{strain}.faa'
     toFna = collectionFnaDir / f'{strain}.fna'
     if not toGbk.exists():
-        gbk, rmgbk = decompFileIfCompressed(strainPaths['gbkPath'])
+        gbk, rmgbk = decompFileIfCompressed(cast(Path, strainPaths['gbkPath']))
         if rmgbk:
             shutil.move(gbk, toGbk)
         else:
             shutil.copyfile(gbk, toGbk)
     if not toGff.exists():
-        gff, rmgff = decompFileIfCompressed(strainPaths['gffPath'])
+        gff, rmgff = decompFileIfCompressed(cast(Path, strainPaths['gffPath']))
         if rmgff:
             shutil.move(gff, toGff)
         else:
             shutil.copyfile(gff, toGff)
     if not toFaa.exists():
-        faa, rmfaa = decompFileIfCompressed(strainPaths['faaPath'])
+        faa, rmfaa = decompFileIfCompressed(cast(Path, strainPaths['faaPath']))
         if rmfaa:
             shutil.move(faa, toFaa)
         else:

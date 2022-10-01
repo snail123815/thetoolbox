@@ -2,7 +2,7 @@ import argparse
 from pathlib import Path
 
 
-from pyBioinfo_modules.bioSequences.protein_from_gbk \
+from pyBioinfo_modules.bio_sequences.protein_from_gbk \
     import getFaaFromGbk
 
 
