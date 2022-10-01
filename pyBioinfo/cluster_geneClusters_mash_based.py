@@ -1,4 +1,5 @@
 import argparse
+import os
 import shutil
 from multiprocessing import Pool
 from glob import glob
@@ -20,21 +21,26 @@ from tempfile import TemporaryDirectory
 
 
 class ClusterInfo(TypedDict):
-    dnaSeq: Seq
-    joinProteins: Seq
+    gbkFile: Path
     gcProducts: str
     organism: str
+    fromSequence: str
     coreRelativeLocs: list[FeatureLocation]
-    gbkFilePath: Path
+    joinedProteinFastaFile: Path
+    fastaId: str
 
 
-def parseClusterGbk(infile: Path, nflank: int = 0) -> ClusterInfo:
+def parseClusterGbk(
+    infile: Path, proteinFastaDir: Path, nflank: int = 0
+) -> ClusterInfo:
     """Parses the genbank files for DNA, protein, cluster, organism
     [Rewrote of parsegbkcluster() from BiG-MAP]
     parameters
     ----------
     infile
-        string, name of the input .gbk file
+        Path of .gbk file
+    proteinFastaDir
+        Path of protein fastas to store joined proteins for each cluster
     nflank
         Number of CDS to flank the core regions
     returns
@@ -107,47 +113,30 @@ def parseClusterGbk(infile: Path, nflank: int = 0) -> ClusterInfo:
     organism = re.sub(f'strain', '', organism)
     organism = re.sub(f'[()"]+', '', organism)
     organism = re.sub(f'[\\/]+', '-', organism)
-    organism = re.sub(f'[._]+', '_', organism)
+    organism = re.sub(f'[.]+', '.', organism)
+    organism = re.sub(f'[_]+', '_', organism)
 
-    return ClusterInfo(
-        dnaSeq=record.seq,
-        joinProteins=Seq(''.join(proteins)),
-        gcProducts=":".join(gcProducts),
-        organism=organism,
-        coreRelativeLocs=coreRelativeLocs,
-        gbkFilePath=infile
-    )
-
-
-def writeFasta(
-    sequence: Seq,
-    seqstype: Literal['GC_PROT', 'GC_DNA', 'HG_PROT', 'HG_DNA'],
-    gcProducts: str,
-    organism: str,
-    infile: Path,
-    outdir: Path
-) -> tuple[Path, Path, str, str]:
-    """Writes the fasta file for each sequence
-    sequences(dnaSeq or joinProteins), gcProducts, organism = output of parseClusterGbk()
-    infile = 000001.1.region001.gbk (no consecutive dot ... in file name)
-    Kitasatospora_acidiphila_MMS16-CNU292_NZ_VIGB01000001.1.region001.gbk
-
-    returns
-    ----------
-    outfile = the name of the written fasta file
-    fromSequence = ID for the input organism genome
-    fastaId = header of the cluster dna sequence
-    """
+    # write to protein fasta file
+    joinProteins = Seq(''.join(proteins))
     regionAndNumber = findClusterNumberStr(infile)
     fromSequence = infile.name.split(regionAndNumber)[0][:-1]
-    fileName = (seqstype + gcProducts if 'HG' in seqstype else seqstype)
-    fileName += f"-{fromSequence}-{regionAndNumber}"
-    fastaId = f"{organism}|{fromSequence}|{seqstype}--Region{regionAndNumber}" \
-        + f"--Entryname={gcProducts}"
-    outfile = outdir / (fileName + '.fasta')
-    SeqIO.write(SeqRecord(sequence), outfile, 'fasta')
-    assert outfile.is_file()
-    return infile.resolve(), outfile.resolve(), fromSequence, fastaId
+    proteinFastaFileName = f"GC_PROT-{fromSequence}-{regionAndNumber}"
+    fastaId = f"{organism}|{fromSequence}|" + \
+        f"GC_PROT--{regionAndNumber}" + f"--Entryname={':'.join(gcProducts)}"
+    proteinFastaFile = proteinFastaDir / (proteinFastaFileName + '.fasta')
+    SeqIO.write(SeqRecord(joinProteins, id=fastaId, description=""),
+                proteinFastaFile, 'fasta')
+    assert proteinFastaFile.is_file()
+
+    return ClusterInfo(
+        gbkFile=infile,
+        gcProducts=":".join(gcProducts),
+        organism=organism,
+        fromSequence=fromSequence,
+        coreRelativeLocs=coreRelativeLocs,
+        joinedProteinFastaFile=proteinFastaFile,
+        fastaId=fastaId
+    )
 
 
 def main():
@@ -172,67 +161,61 @@ def main():
     # 5. move gbk files together for BiG-SCAPE
     # 6. run BiG-SCAPE
 
+    # Prepare dirs
     if args.tmp is None:
-        fastaDir = TemporaryDirectory()
-        mashDir = TemporaryDirectory()
-        gbkFamiliesDir = TemporaryDirectory()
-        fastaDirPath = Path(fastaDir.name)
-        mashDirPath = Path(mashDir.name)
-        gbkFamiliesDirPath = Path(gbkFamiliesDir.name)
+        fastaTempD = TemporaryDirectory()
+        mashTempD = TemporaryDirectory()
+        gbkFamiliesTempD = TemporaryDirectory()
+        proteinFastaDir = Path(fastaTempD.name)
+        proteinMashDir = Path(mashTempD.name)
+        gbkFamiliesDir = Path(gbkFamiliesTempD.name)
     else:
-        fastaDirPath = args.tmp / 'proteinFastas'
-        mashDirPath = args.tmp / 'mashSketchAndDist'
-        gbkFamiliesDirPath = args.tmp / 'gbkFamilies'
-        fastaDirPath.mkdir(parents=True, exist_ok=True)
-        mashDirPath.mkdir(parents=True, exist_ok=True)
-        gbkFamiliesDirPath.mkdir(parents=True, exist_ok=True)
+        if not args.tmp.exists():
+            args.tmp.mkdir(parents=True)
+        proteinFastaDir = args.tmp / 'proteinFastas'
+        proteinMashDir = args.tmp / 'mashSketchAndDist'
+        gbkFamiliesDir = args.tmp / 'gbkFamilies'
+        proteinFastaDir.mkdir(exist_ok=True)
+        proteinMashDir.mkdir(exist_ok=True)
+        gbkFamiliesDir.mkdir(exist_ok=True)
+
     try:
-        sketchFile = mashDirPath / 'GC_PROT.msh'
-        distanceTable = mashDirPath / 'mash_output_GC.tab'
-        mashTableFinishedFlagFile = mashDirPath / 'distFinished'
+        sketchFile = proteinMashDir / 'GC_PROT.msh'
+        distanceTable = proteinMashDir / 'mash_output_GC.tab'
+        mashTableFinishedFlagFile = proteinMashDir / 'distFinished'
         gbks = list(inputPath.glob(clusterGbkGlobTxt))
         for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
                       desc=(f'Gathering gbk files from {inputPath.name}')):
             gbks.extend(Path(gbk) for gbk in
-                        glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
+                        glob(str(d / ('**/' + clusterGbkGlobTxt)),
+                        recursive=True))
 
         with Pool(args.cpus) as readGbkPool:
             results = [
-                readGbkPool.apply_async(parseClusterGbk, (gbk,))
+                readGbkPool.apply_async(parseClusterGbk, (gbk, proteinFastaDir))
                 for gbk in gbks
             ]
-            clusterInfos: list[ClusterInfo] = [
-                r.get() for r in tqdm(results, desc='Reading gbk files')
-            ]
-        with Pool(args.cpus) as writeFastaPool:
-            results = [
-                writeFastaPool.apply_async(
-                    writeFasta,
-                    (
-                        ci['joinProteins'],
-                        'GC_PROT',
-                        ci['gcProducts'],
-                        ci['organism'],
-                        ci['gbkFilePath'],
-                        fastaDirPath
-                    )
-                ) for ci in clusterInfos
-            ]
-            fastaReturns = [r.get() for r in tqdm(
-                results,
-                desc='Writing protein fasta files...'
-            )]
-        fastaToGbk = {str(ret[1]): ret[0] for ret in fastaReturns}
+            # clusterInfos: list[ClusterInfo] = [
+            #     r.get() for r in tqdm(results, desc='Parsing cluster info')
+            # ]
+            clusterInfoDict = {}
+            for r in tqdm(results, desc='Parsing cluster info'):
+                ci = r.get()
+                clusterInfoDict[ci['joinedProteinFastaFile'].name] = ci
+
         if not mashTableFinishedFlagFile.exists():
+            cwd = Path().resolve()
+            os.chdir(proteinFastaDir)
             print('Making sketch...')
             mashSketchFiles(
-                fastaDirPath.glob('GC_PROT*.fasta'),
+                proteinFastaDir.glob('GC_PROT*.fasta'),
                 sketchFile.with_suffix(''),
                 kmer=16,
                 sketch=5000,
                 nthreads=args.cpus,
                 molecule='protein'
             )
+            os.chdir(cwd)
             print("Calculationg distance...")
             mashDistance(
                 sketchFile,
@@ -247,30 +230,31 @@ def main():
             calculate_medoid(distanceTable, 0.8)
 
         familyGbksDirs = []
-        for fasta, members in dict_medoids.items():
+        for name, members in dict_medoids.items():
             if len(members) > 1:
-                assert fasta in members
-                name = Path(fasta).with_suffix('').name
-                targetDir = gbkFamiliesDirPath / name
+                assert name in members
+                name = Path(name).with_suffix('').name
+                targetDir = gbkFamiliesDir / name
                 if targetDir.exists():
                     shutil.rmtree(targetDir)
                 targetDir.mkdir()
                 for m in members:
-                    gbk = fastaToGbk[m]
+                    gbk = clusterInfoDict[m]['gbkFile']
                     target = targetDir / gbk.name
                     target.symlink_to(gbk.resolve())
                 familyGbksDirs.append(targetDir)
 
-        args.outputPath.mkdir(exist_ok=True)
+        # args.outputPath.mkdir(exist_ok=True)
         cpuDist = (1, 3)
         bigscapePoolCpus = max(1, round(args.cpus * cpuDist[0] / sum(cpuDist)))
+        singleBigscapeRunCpus = -(args.cpus // -bigscapePoolCpus)
         with Pool(bigscapePoolCpus) as bigscapePool:
             results = [
                 bigscapePool.apply_async(
                     runBigscape,
                     (dir, args.outputPath / dir.name),
                     kwds={
-                        'cpus': -(args.cpus // -bigscapePoolCpus),
+                        'cpus': singleBigscapeRunCpus,
                         'cutoffs': [0.2, ]
                     }
                 ) for dir in familyGbksDirs
@@ -283,9 +267,9 @@ def main():
         print('finish')  # break point
     finally:
         if args.tmp is None:
-            fastaDir.cleanup()
-            mashDir.cleanup()
-            gbkFamiliesDir.cleanup()
+            fastaTempD.cleanup()
+            mashTempD.cleanup()
+            gbkFamiliesTempD.cleanup()
 
 
 if __name__ == "__main__":

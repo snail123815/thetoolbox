@@ -28,7 +28,7 @@ def mashSketchFiles(
     fileList = NamedTemporaryFile()
     with open(fileList.name, 'w') as fl:
         for f in inputFiles:
-            fl.write(f'{f.resolve()}\n')
+            fl.write(f'{f.resolve().relative_to(Path(".").resolve())}\n')
     cmd = f"mash sketch -o {output} -k {kmer} -p {nthreads} -s {sketch}"
     cmd += (' -a' if molecule == 'protein' else '')
     cmd += f' -l {fileList.name}'
@@ -75,7 +75,6 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
 # Extracting LSH clusters (buckets) using cut-off & calculate medoid
 ######################################################################
 
-
 def calculate_medoid(
     inputDistanceTablePath: Path,  # output file (return) of mashDistance()
     cutOff: float,  # default 0.8
@@ -105,7 +104,7 @@ def calculate_medoid(
                 bar_format=r"{l_bar}{bar}| {n:,.0f}/{total:,.0f} {unit} " +
                 r"[{elapsed}<{remaining}, {rate_fmt}{postfix}]",
                 unit_scale=1 / 1048576, unit='MB',
-                desc="Reading mash dist table and generate families")
+                desc="Generating families from distance file")
     with inputDistanceTablePath.open('r') as input:
         readSize = 0
         for idx, line in enumerate(input):
@@ -115,6 +114,7 @@ def calculate_medoid(
                 readSize = 0
             if line.startswith('#') or line.strip() == "":
                 continue
+
             # Split into tab-separated elements
             refId, queryId, distanceStr, pValueStr, nHashesStr \
                 = line.strip().split('\t')
@@ -182,6 +182,7 @@ def calculate_medoid(
                     refId,
                     distance
                 )
+
         pbar.update(readSize)
     pbar.close()
     # For each family: Build a distance matrix, and then work out the medoid
@@ -191,8 +192,8 @@ def calculate_medoid(
         medoid_index = np.argmin(np_array.sum(axis=0))
         # Create a dictionary using the medoid as key and
         # the family_members as values
-        dict_medoids[family_members[familyName][medoid_index]] \
-            = family_members[familyName]
+        medoidName = family_members[familyName][medoid_index]
+        dict_medoids[medoidName] = family_members[familyName]
     return dict_medoids, family_distance_matrices
 
 
