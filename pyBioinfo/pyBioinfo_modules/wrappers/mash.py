@@ -1,7 +1,9 @@
+import sys
 import subprocess
 from pathlib import Path
 from typing import Literal
 import numpy as np
+from tqdm import tqdm
 from tempfile import NamedTemporaryFile
 
 from pyBioinfo_modules.wrappers._environment_settings \
@@ -99,8 +101,18 @@ def calculate_medoid(
     # family_members dict, key = family name, values = list of members
     family_distance_matrices: dict[str, list[float]] = {}
     dict_medoids: dict[str, list[str]] = med
+    pbar = tqdm(total=inputDistanceTablePath.stat().st_size,
+                bar_format=r"{l_bar}{bar}| {n:,.0f}/{total:,.0f} {unit} " +
+                r"[{elapsed}<{remaining}, {rate_fmt}{postfix}]",
+                unit_scale=1 / 1048576, unit='MB',
+                desc="Reading mash dist table and generate families")
     with inputDistanceTablePath.open('r') as input:
-        for line in input:
+        readSize = 0
+        for idx, line in enumerate(input):
+            readSize += sys.getsizeof(line) - 50  # length of '\n'
+            if idx % 10000 == 0:
+                pbar.update(readSize)
+                readSize = 0
             if line.startswith('#') or line.strip() == "":
                 continue
             # Split into tab-separated elements
@@ -170,6 +182,7 @@ def calculate_medoid(
                     refId,
                     distance
                 )
+    pbar.close()
     # For each family: Build a distance matrix, and then work out the medoid
     for familyName in familyFiltered.keys():
         # Calculate the medoid from the distances

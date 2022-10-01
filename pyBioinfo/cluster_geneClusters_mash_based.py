@@ -153,10 +153,14 @@ def writeFasta(
 
 def main():
     parser = argparse.ArgumentParser()
-    parser.add_argument('p', type=Path, help='Input dir')
-    parser.add_argument('--cpus', type=int, help='Processes number', default=4)
-    parser.add_argument('--outputPath', type=Path, help='Bigscape results',
-                        required=True)
+    parser.add_argument('p', type=Path,
+                        help='Input dir')
+    parser.add_argument('--cpus', type=int,
+                        help='Processes number', default=4)
+    parser.add_argument('--tmp', type=Path,
+                        help='temporary files folder', default=None)
+    parser.add_argument('--outputPath', type=Path,
+                        help='Bigscape results', required=True)
 
     args = parser.parse_args()
     inputPath: Path = args.p
@@ -169,64 +173,74 @@ def main():
     # 5. move gbk files together for BiG-SCAPE
     # 6. run BiG-SCAPE
 
-    gbks = list(inputPath.glob(clusterGbkGlobTxt))
-    for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
-                  desc=(f'Gathering gbk files from {inputPath.name}')):
-        gbks.extend(Path(gbk) for gbk in
-                    glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
 
-    with Pool(args.cpus) as readGbkPool:
-        results = [
-            readGbkPool.apply_async(parseClusterGbk, (gbk,))
-            for gbk in gbks
-        ]
-        clusterInfos: list[ClusterInfo] = [
-            r.get() for r in tqdm(results, desc='Reading gbk files')
-        ]
-
-    fastaDir = TemporaryDirectory()
-    mashDir = TemporaryDirectory()
-    gbkFamiliesDir = TemporaryDirectory()
-    try:
+    if args.tmp is None:
+        fastaDir = TemporaryDirectory()
+        mashDir = TemporaryDirectory()
+        gbkFamiliesDir = TemporaryDirectory()
         fastaDirPath = Path(fastaDir.name)
         mashDirPath = Path(mashDir.name)
         gbkFamiliesDirPath = Path(gbkFamiliesDir.name)
-        with Pool(args.cpus) as writeFastaPool:
-            results = [
-                writeFastaPool.apply_async(
-                    writeFasta,
-                    (
-                        ci['joinProteins'],
-                        'GC_PROT',
-                        ci['gcProducts'],
-                        ci['organism'],
-                        ci['gbkFilePath'],
-                        fastaDirPath
-                    )
-                ) for ci in clusterInfos
-            ]
-            fastaReturns = [r.get() for r in tqdm(
-                results,
-                desc='Writing protein fasta files...'
-            )]
-        fastaToGbk = {str(ret[1]): ret[0] for ret in fastaReturns}
+    else:
+        fastaDirPath = args.tmp / 'proteinFastas'
+        mashDirPath = args.tmp / 'mashSketchAndDist'
+        gbkFamiliesDirPath = args.tmp / 'gbkFamilies'
+    try:
         sketchFile = mashDirPath / 'GC_PROT.msh'
-        print('Making sketch...')
-        mashSketchFiles(
-            fastaDirPath.glob('GC_PROT*.fasta'),
-            sketchFile.with_suffix(''),
-            kmer=16,
-            sketch=5000,
-            nthreads=args.cpus,
-            molecule='protein'
-        )
         distanceTable = mashDirPath / 'mash_output_GC.tab'
-        print("Calculationg distance...")
-        mashDistance(
-            sketchFile,
-            distanceTable,
-            nthreads=args.cpus,
-        )
+        mashTableFinishedFlagFile = mashDirPath / 'distFinished'
+        if not mashTableFinishedFlagFile.exists():
+            gbks = list(inputPath.glob(clusterGbkGlobTxt))
+            for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
+                        desc=(f'Gathering gbk files from {inputPath.name}')):
+                gbks.extend(Path(gbk) for gbk in
+                            glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
+
+            with Pool(args.cpus) as readGbkPool:
+                results = [
+                    readGbkPool.apply_async(parseClusterGbk, (gbk,))
+                    for gbk in gbks
+                ]
+                clusterInfos: list[ClusterInfo] = [
+                    r.get() for r in tqdm(results, desc='Reading gbk files')
+                ]
+            with Pool(args.cpus) as writeFastaPool:
+                results = [
+                    writeFastaPool.apply_async(
+                        writeFasta,
+                        (
+                            ci['joinProteins'],
+                            'GC_PROT',
+                            ci['gcProducts'],
+                            ci['organism'],
+                            ci['gbkFilePath'],
+                            fastaDirPath
+                        )
+                    ) for ci in clusterInfos
+                ]
+                fastaReturns = [r.get() for r in tqdm(
+                    results,
+                    desc='Writing protein fasta files...'
+                )]
+            fastaToGbk = {str(ret[1]): ret[0] for ret in fastaReturns}
+            print('Making sketch...')
+            mashSketchFiles(
+                fastaDirPath.glob('GC_PROT*.fasta'),
+                sketchFile.with_suffix(''),
+                kmer=16,
+                sketch=5000,
+                nthreads=args.cpus,
+                molecule='protein'
+            )
+            print("Calculationg distance...")
+            mashDistance(
+                sketchFile,
+                distanceTable,
+                nthreads=args.cpus,
+            )
+            assert distanceTable.exists()
+            mashTableFinishedFlagFile.touch()
+
         print('Gather families and calculating medoid...')
         dict_medoids, family_distance_matrice = \
             calculate_medoid(distanceTable, 0.8)
@@ -245,14 +259,15 @@ def main():
                 familyGbksDirs.append(targetDir)
 
         args.outputPath.mkdir(exist_ok=True)
-        cpuDist = (1, 1)
-        with Pool(round(args.cpus * cpuDist[0] / sum(cpuDist))) as bigscapePool:
+        cpuDist = (1, 3)
+        bigscapePoolCpus = max(1, round(args.cpus * cpuDist[0] / sum(cpuDist)))
+        with Pool(bigscapePoolCpus) as bigscapePool:
             results = [
                 bigscapePool.apply_async(
                     runBigscape,
                     (dir, args.outputPath / dir.name),
                     kwds={
-                        'cpus': round(args.cpus * cpuDist[1] / sum(cpuDist)),
+                        'cpus': max(1, args.cpus - bigscapePoolCpus),
                         'cutoffs': [0.2, ]
                     }
                 ) for dir in familyGbksDirs
@@ -264,9 +279,10 @@ def main():
 
         print('finish')  # break point
     finally:
-        fastaDir.cleanup()
-        mashDir.cleanup()
-        gbkFamiliesDir.cleanup()
+        if args.tmp is None:
+            fastaDir.cleanup()
+            mashDir.cleanup()
+            gbkFamiliesDir.cleanup()
 
 
 if __name__ == "__main__":
