@@ -182,6 +182,7 @@ def calculate_medoid(
                     refId,
                     distance
                 )
+        pbar.update(readSize)
     pbar.close()
     # For each family: Build a distance matrix, and then work out the medoid
     for familyName in familyFiltered.keys():

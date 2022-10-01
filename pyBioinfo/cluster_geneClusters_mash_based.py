@@ -4,7 +4,6 @@ from multiprocessing import Pool
 from glob import glob
 from tqdm import tqdm
 from pathlib import Path
-from turtle import distance
 from Bio import SeqIO
 from Bio.Seq import Seq
 from Bio.SeqFeature import FeatureLocation
@@ -148,7 +147,7 @@ def writeFasta(
     outfile = outdir / (fileName + '.fasta')
     SeqIO.write(SeqRecord(sequence), outfile, 'fasta')
     assert outfile.is_file()
-    return infile, outfile, fromSequence, fastaId
+    return infile.resolve(), outfile.resolve(), fromSequence, fastaId
 
 
 def main():
@@ -173,7 +172,6 @@ def main():
     # 5. move gbk files together for BiG-SCAPE
     # 6. run BiG-SCAPE
 
-
     if args.tmp is None:
         fastaDir = TemporaryDirectory()
         mashDir = TemporaryDirectory()
@@ -185,44 +183,47 @@ def main():
         fastaDirPath = args.tmp / 'proteinFastas'
         mashDirPath = args.tmp / 'mashSketchAndDist'
         gbkFamiliesDirPath = args.tmp / 'gbkFamilies'
+        fastaDirPath.mkdir(parents=True, exist_ok=True)
+        mashDirPath.mkdir(parents=True, exist_ok=True)
+        gbkFamiliesDirPath.mkdir(parents=True, exist_ok=True)
     try:
         sketchFile = mashDirPath / 'GC_PROT.msh'
         distanceTable = mashDirPath / 'mash_output_GC.tab'
         mashTableFinishedFlagFile = mashDirPath / 'distFinished'
-        if not mashTableFinishedFlagFile.exists():
-            gbks = list(inputPath.glob(clusterGbkGlobTxt))
-            for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
-                        desc=(f'Gathering gbk files from {inputPath.name}')):
-                gbks.extend(Path(gbk) for gbk in
-                            glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
+        gbks = list(inputPath.glob(clusterGbkGlobTxt))
+        for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
+                      desc=(f'Gathering gbk files from {inputPath.name}')):
+            gbks.extend(Path(gbk) for gbk in
+                        glob(str(d / ('**/' + clusterGbkGlobTxt)), recursive=True))
 
-            with Pool(args.cpus) as readGbkPool:
-                results = [
-                    readGbkPool.apply_async(parseClusterGbk, (gbk,))
-                    for gbk in gbks
-                ]
-                clusterInfos: list[ClusterInfo] = [
-                    r.get() for r in tqdm(results, desc='Reading gbk files')
-                ]
-            with Pool(args.cpus) as writeFastaPool:
-                results = [
-                    writeFastaPool.apply_async(
-                        writeFasta,
-                        (
-                            ci['joinProteins'],
-                            'GC_PROT',
-                            ci['gcProducts'],
-                            ci['organism'],
-                            ci['gbkFilePath'],
-                            fastaDirPath
-                        )
-                    ) for ci in clusterInfos
-                ]
-                fastaReturns = [r.get() for r in tqdm(
-                    results,
-                    desc='Writing protein fasta files...'
-                )]
-            fastaToGbk = {str(ret[1]): ret[0] for ret in fastaReturns}
+        with Pool(args.cpus) as readGbkPool:
+            results = [
+                readGbkPool.apply_async(parseClusterGbk, (gbk,))
+                for gbk in gbks
+            ]
+            clusterInfos: list[ClusterInfo] = [
+                r.get() for r in tqdm(results, desc='Reading gbk files')
+            ]
+        with Pool(args.cpus) as writeFastaPool:
+            results = [
+                writeFastaPool.apply_async(
+                    writeFasta,
+                    (
+                        ci['joinProteins'],
+                        'GC_PROT',
+                        ci['gcProducts'],
+                        ci['organism'],
+                        ci['gbkFilePath'],
+                        fastaDirPath
+                    )
+                ) for ci in clusterInfos
+            ]
+            fastaReturns = [r.get() for r in tqdm(
+                results,
+                desc='Writing protein fasta files...'
+            )]
+        fastaToGbk = {str(ret[1]): ret[0] for ret in fastaReturns}
+        if not mashTableFinishedFlagFile.exists():
             print('Making sketch...')
             mashSketchFiles(
                 fastaDirPath.glob('GC_PROT*.fasta'),
@@ -251,7 +252,9 @@ def main():
                 assert fasta in members
                 name = Path(fasta).with_suffix('').name
                 targetDir = gbkFamiliesDirPath / name
-                targetDir.mkdir(exist_ok=True)
+                if targetDir.exists():
+                    shutil.rmtree(targetDir)
+                targetDir.mkdir()
                 for m in members:
                     gbk = fastaToGbk[m]
                     target = targetDir / gbk.name
@@ -267,7 +270,8 @@ def main():
                     runBigscape,
                     (dir, args.outputPath / dir.name),
                     kwds={
-                        'cpus': max(1, args.cpus - bigscapePoolCpus),
+                        'cpus': args.cpus - (0 if bigscapePoolCpus == 1
+                                             else bigscapePoolCpus),
                         'cutoffs': [0.2, ]
                     }
                 ) for dir in familyGbksDirs
