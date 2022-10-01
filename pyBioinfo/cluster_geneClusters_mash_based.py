@@ -270,8 +270,7 @@ def main():
                     runBigscape,
                     (dir, args.outputPath / dir.name),
                     kwds={
-                        'cpus': args.cpus - (0 if bigscapePoolCpus == 1
-                                             else bigscapePoolCpus),
+                        'cpus': -(args.cpus // -bigscapePoolCpus),
                         'cutoffs': [0.2, ]
                     }
                 ) for dir in familyGbksDirs
