@@ -75,6 +75,7 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
 # Extracting LSH clusters (buckets) using cut-off & calculate medoid
 ######################################################################
 
+
 def calculate_medoid(
     inputDistanceTablePath: Path,  # output file (return) of mashDistance()
     cutOff: float,  # default 0.8
@@ -92,6 +93,53 @@ def calculate_medoid(
     ----------
     dict_medoids = {fasta file of medoid: similar fasta files}
     """
+    def add_to_distance_matrix(distance_matrix, idList,
+                               refId, queryId, distance):
+        """
+        Adds the distance of refId-queryId to the distance matrix and index
+        ----------
+        distance_matrix
+            {fasta file name: distance matrix}
+        idList
+            list, fasta file name
+        refId
+            fasta file name
+        queryId
+            fasta file name
+        distance
+            float, between 0 and 1
+        returns
+        ----------
+        """
+        def add_new_gene(distance_matrix, idList, id) -> int:
+            """
+            Adds a distance matrix
+            ----------
+            distance_matrix
+                {fasta file name: distance matrix}
+            idList
+                list, fasta file name
+            id
+                fasta file name
+            returns
+            ----------
+            idList.index(gene)
+                int, index number of the gene
+            """
+            if id not in idList:
+                # Add to list
+                idList.append(id)
+                idList.index(id)
+                # Extend distance matrix: One new row, one new column
+                for row in distance_matrix:
+                    row.append(0)
+                distance_matrix.append([0] * len(idList))
+            return idList.index(id)
+        index1 = add_new_gene(distance_matrix, idList, refId)
+        index2 = add_new_gene(distance_matrix, idList, queryId)
+        distance_matrix[index1][index2] = distance
+        distance_matrix[index2][index1] = distance
+        return ()
     # Parse the input into a dictionary of gene families
     family: dict[str, str] = {}
     # family dict, key = family members, values = family names
@@ -195,54 +243,3 @@ def calculate_medoid(
         medoidName = family_members[familyName][medoid_index]
         dict_medoids[medoidName] = family_members[familyName]
     return dict_medoids, family_distance_matrices
-
-
-def add_to_distance_matrix(distance_matrix, idList,
-                           refId, queryId, distance):
-    """
-    Adds the distance of refId-queryId to the distance matrix and index
-    ----------
-    distance_matrix
-        {fasta file name: distance matrix}
-    idList
-        list, fasta file name
-    refId
-        fasta file name
-    queryId
-        fasta file name
-    distance
-        float, between 0 and 1
-    returns
-    ----------
-    """
-    index1 = add_new_gene(distance_matrix, idList, refId)
-    index2 = add_new_gene(distance_matrix, idList, queryId)
-    distance_matrix[index1][index2] = distance
-    distance_matrix[index2][index1] = distance
-    return ()
-
-
-def add_new_gene(distance_matrix, idList, id) -> int:
-    """
-    Adds a distance matrix
-    ----------
-    distance_matrix
-        {fasta file name: distance matrix}
-    idList
-        list, fasta file name
-    id
-        fasta file name
-    returns
-    ----------
-    idList.index(gene)
-        int, index number of the gene
-    """
-    if id not in idList:
-        # Add to list
-        idList.append(id)
-        idList.index(id)
-        # Extend distance matrix: One new row, one new column
-        for row in distance_matrix:
-            row.append(0)
-        distance_matrix.append([0] * len(idList))
-    return idList.index(id)
