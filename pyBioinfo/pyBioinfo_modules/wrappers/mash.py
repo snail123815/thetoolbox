@@ -80,7 +80,7 @@ def calculate_medoid(
     inputDistanceTablePath: Path,  # output file (return) of mashDistance()
     cutOff: float,  # default 0.8
     med: dict[str, list[str]] = {}
-) -> tuple[dict[str, list[str]], dict[str, list[float]]]:
+) -> tuple[dict[str, list[str]], dict[str, list[list[float]]]]:
     """
     calculates the GCFs based on similarity threshold
     parameters and calculates the medoid of that GCF
@@ -93,61 +93,37 @@ def calculate_medoid(
     ----------
     dict_medoids = {fasta file of medoid: similar fasta files}
     """
-    def add_to_distance_matrix(distance_matrix, idList,
-                               refId, queryId, distance):
-        """
-        Adds the distance of refId-queryId to the distance matrix and index
-        ----------
-        distance_matrix
-            {fasta file name: distance matrix}
-        idList
-            list, fasta file name
-        refId
-            fasta file name
-        queryId
-            fasta file name
-        distance
-            float, between 0 and 1
-        returns
-        ----------
-        """
-        def add_new_gene(distance_matrix, idList, id) -> int:
-            """
-            Adds a distance matrix
-            ----------
-            distance_matrix
-                {fasta file name: distance matrix}
-            idList
-                list, fasta file name
-            id
-                fasta file name
-            returns
-            ----------
-            idList.index(gene)
-                int, index number of the gene
-            """
-            if id not in idList:
-                # Add to list
-                idList.append(id)
-                idList.index(id)
-                # Extend distance matrix: One new row, one new column
-                for row in distance_matrix:
-                    row.append(0)
-                distance_matrix.append([0] * len(idList))
-            return idList.index(id)
-        index1 = add_new_gene(distance_matrix, idList, refId)
-        index2 = add_new_gene(distance_matrix, idList, queryId)
-        distance_matrix[index1][index2] = distance
-        distance_matrix[index2][index1] = distance
-        return ()
     # Parse the input into a dictionary of gene families
     family: dict[str, str] = {}
     # family dict, key = family members, values = family names
     familyFiltered = {}
     family_members: dict[str, list[str]] = {}
     # family_members dict, key = family name, values = list of members
-    family_distance_matrices: dict[str, list[float]] = {}
+    family_distance_matrices: dict[str, list[list[float]]] = {}
     dict_medoids: dict[str, list[str]] = med
+
+    def add_to_distance_matrix(familyName, refId, queryId, distance):
+        def add_new_gene(familyName, idList, id) -> int:
+            if id not in idList:
+                # Add to list
+                idList.append(id)
+                idList.index(id)
+                # Extend distance matrix: One new row, one new column
+                for row in family_distance_matrices[familyName]:
+                    row.append(0)
+                family_distance_matrices[familyName].append([0] * len(idList))
+            return idList.index(id)
+        index1 = add_new_gene(
+            family_distance_matrices[familyName],
+            family_members[familyName],
+            refId)
+        index2 = add_new_gene(
+            family_distance_matrices[familyName],
+            family_members[familyName],
+            queryId)
+        family_distance_matrices[familyName][index1][index2] = distance
+        family_distance_matrices[familyName][index2][index1] = distance
+        return ()
     pbar = tqdm(total=inputDistanceTablePath.stat().st_size,
                 bar_format=r"{l_bar}{bar}| {n:,.0f}/{total:,.0f} {unit} " +
                 r"[{elapsed}<{remaining}, {rate_fmt}{postfix}]",
@@ -196,8 +172,7 @@ def calculate_medoid(
                     if family[refId] == familyName:
                         # refId is in our family, so record the distance
                         add_to_distance_matrix(
-                            family_distance_matrices[familyName],
-                            family_members[familyName],
+                            familyName,
                             queryId,
                             refId,
                             distance
@@ -214,8 +189,7 @@ def calculate_medoid(
                     # insert refId into that family as only member, with a
                     # distance of 0
                     add_to_distance_matrix(
-                        family_distance_matrices[gene1_family_name],
-                        family_members[gene1_family_name],
+                        familyName,
                         refId,
                         refId,
                         distance
@@ -224,8 +198,7 @@ def calculate_medoid(
                 # There is some overlap, and we want refId also in this family
                 family[refId] = familyName
                 add_to_distance_matrix(
-                    family_distance_matrices[familyName],
-                    family_members[familyName],
+                    familyName,
                     queryId,
                     refId,
                     distance
