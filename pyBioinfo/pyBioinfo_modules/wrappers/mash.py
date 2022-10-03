@@ -189,7 +189,7 @@ def calculate_medoid(
                     # insert refId into that family as only member, with a
                     # distance of 0
                     add_to_distance_matrix(
-                        familyName,
+                        gene1_family_name,
                         refId,
                         refId,
                         distance
