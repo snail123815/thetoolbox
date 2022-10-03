@@ -31,7 +31,10 @@ class ClusterInfo(TypedDict):
 
 
 def parseClusterGbk(
-    infile: Path, proteinFastaDir: Path, nflank: int = 0
+    infile: Path,
+    proteinFastaDir: Path,
+    id: int | None = None,
+    nflank: int = 0,
 ) -> ClusterInfo:
     """Parses the genbank files for DNA, protein, cluster, organism
     [Rewrote of parsegbkcluster() from BiG-MAP]
@@ -120,10 +123,14 @@ def parseClusterGbk(
     joinProteins = Seq(''.join(proteins))
     regionAndNumber = findClusterNumberStr(infile)
     fromSequence = infile.name.split(regionAndNumber)[0][:-1]
-    proteinFastaFileName = f"GC_PROT-{fromSequence}-{regionAndNumber}"
+    if id is None:
+        proteinFastaFileName = \
+            f"GC_PROT-{fromSequence}-{regionAndNumber}" + ".fasta"
+    else:
+        proteinFastaFileName = f"P{id}"
     fastaId = f"{organism}|{fromSequence}|" + \
         f"GC_PROT--{regionAndNumber}" + f"--Entryname={':'.join(gcProducts)}"
-    proteinFastaFile = proteinFastaDir / (proteinFastaFileName + '.fasta')
+    proteinFastaFile = proteinFastaDir / proteinFastaFileName
     SeqIO.write(SeqRecord(joinProteins, id=fastaId, description=""),
                 proteinFastaFile, 'fasta')
     assert proteinFastaFile.is_file()
@@ -192,8 +199,9 @@ def main():
 
         with Pool(args.cpus) as readGbkPool:
             results = [
-                readGbkPool.apply_async(parseClusterGbk, (gbk, proteinFastaDir))
-                for gbk in gbks
+                readGbkPool.apply_async(
+                    parseClusterGbk, (gbk, proteinFastaDir, i))
+                for i, gbk in enumerate(gbks)
             ]
             # clusterInfos: list[ClusterInfo] = [
             #     r.get() for r in tqdm(results, desc='Parsing cluster info')
@@ -208,7 +216,7 @@ def main():
             os.chdir(proteinFastaDir)
             print('Making sketch...')
             mashSketchFiles(
-                proteinFastaDir.glob('GC_PROT*.fasta'),
+                proteinFastaDir.glob('P*'),
                 sketchFile.with_suffix(''),
                 kmer=16,
                 sketch=5000,
