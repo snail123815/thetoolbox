@@ -34,7 +34,9 @@ def mashSketchFiles(
     cmd += f' -l {fileList.name}'
     mashSketchRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
-        shell=True, capture_output=True, check=True)
+        shell=True, capture_output=True,
+        executable=shell, check=True
+    )
     fileList.close()
     outputMsh = Path(str(output) + '.msh')
     assert outputMsh.is_file()
@@ -67,7 +69,7 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
     cmd = f"mash dist -p {nthreads} {inputMsh} {inputMsh} > {outputFile}"
     mashDistRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
-        shell=True, check=True)
+        shell=True, check=True, executable=shell)
     assert outputFile.exists
     return outputFile
 
@@ -105,20 +107,18 @@ def calculate_medoid(
     def add_to_distance_matrix(familyName, refId, queryId, distance):
         def add_new_gene(familyName, idList, id) -> int:
             if id not in idList:
-                # Add to list
                 idList.append(id)
-                idList.index(id)
                 # Extend distance matrix: One new row, one new column
                 for row in family_distance_matrices[familyName]:
                     row.append(0)
                 family_distance_matrices[familyName].append([0] * len(idList))
             return idList.index(id)
         index1 = add_new_gene(
-            family_distance_matrices[familyName],
+            familyName,
             family_members[familyName],
             refId)
         index2 = add_new_gene(
-            family_distance_matrices[familyName],
+            familyName,
             family_members[familyName],
             queryId)
         family_distance_matrices[familyName][index1][index2] = distance
