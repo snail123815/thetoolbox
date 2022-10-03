@@ -28,13 +28,15 @@ def mashSketchFiles(
     fileList = NamedTemporaryFile()
     with open(fileList.name, 'w') as fl:
         for f in inputFiles:
-            fl.write(f'{f.resolve()}\n')
+            fl.write(f'{f.resolve().relative_to(Path(".").resolve())}\n')
     cmd = f"mash sketch -o {output} -k {kmer} -p {nthreads} -s {sketch}"
     cmd += (' -a' if molecule == 'protein' else '')
     cmd += f' -l {fileList.name}'
     mashSketchRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
-        shell=True, capture_output=True, check=True)
+        shell=True, capture_output=True,
+        executable=shell, check=True
+    )
     fileList.close()
     outputMsh = Path(str(output) + '.msh')
     assert outputMsh.is_file()
@@ -67,7 +69,7 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
     cmd = f"mash dist -p {nthreads} {inputMsh} {inputMsh} > {outputFile}"
     mashDistRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
-        shell=True, check=True)
+        shell=True, check=True, executable=shell)
     assert outputFile.exists
     return outputFile
 
@@ -80,7 +82,7 @@ def calculate_medoid(
     inputDistanceTablePath: Path,  # output file (return) of mashDistance()
     cutOff: float,  # default 0.8
     med: dict[str, list[str]] = {}
-) -> tuple[dict[str, list[str]], dict[str, list[float]]]:
+) -> tuple[dict[str, list[str]], dict[str, list[list[float]]]]:
     """
     calculates the GCFs based on similarity threshold
     parameters and calculates the medoid of that GCF
@@ -99,13 +101,34 @@ def calculate_medoid(
     familyFiltered = {}
     family_members: dict[str, list[str]] = {}
     # family_members dict, key = family name, values = list of members
-    family_distance_matrices: dict[str, list[float]] = {}
+    family_distance_matrices: dict[str, list[list[float]]] = {}
     dict_medoids: dict[str, list[str]] = med
+
+    def add_to_distance_matrix(familyName, refId, queryId, distance):
+        def add_new_gene(familyName, idList, id) -> int:
+            if id not in idList:
+                idList.append(id)
+                # Extend distance matrix: One new row, one new column
+                for row in family_distance_matrices[familyName]:
+                    row.append(0)
+                family_distance_matrices[familyName].append([0] * len(idList))
+            return idList.index(id)
+        index1 = add_new_gene(
+            familyName,
+            family_members[familyName],
+            refId)
+        index2 = add_new_gene(
+            familyName,
+            family_members[familyName],
+            queryId)
+        family_distance_matrices[familyName][index1][index2] = distance
+        family_distance_matrices[familyName][index2][index1] = distance
+        return ()
     pbar = tqdm(total=inputDistanceTablePath.stat().st_size,
                 bar_format=r"{l_bar}{bar}| {n:,.0f}/{total:,.0f} {unit} " +
                 r"[{elapsed}<{remaining}, {rate_fmt}{postfix}]",
                 unit_scale=1 / 1048576, unit='MB',
-                desc="Reading mash dist table and generate families")
+                desc="Generating families from distance file")
     with inputDistanceTablePath.open('r') as input:
         readSize = 0
         for idx, line in enumerate(input):
@@ -115,6 +138,7 @@ def calculate_medoid(
                 readSize = 0
             if line.startswith('#') or line.strip() == "":
                 continue
+
             # Split into tab-separated elements
             refId, queryId, distanceStr, pValueStr, nHashesStr \
                 = line.strip().split('\t')
@@ -148,8 +172,7 @@ def calculate_medoid(
                     if family[refId] == familyName:
                         # refId is in our family, so record the distance
                         add_to_distance_matrix(
-                            family_distance_matrices[familyName],
-                            family_members[familyName],
+                            familyName,
                             queryId,
                             refId,
                             distance
@@ -166,8 +189,7 @@ def calculate_medoid(
                     # insert refId into that family as only member, with a
                     # distance of 0
                     add_to_distance_matrix(
-                        family_distance_matrices[gene1_family_name],
-                        family_members[gene1_family_name],
+                        gene1_family_name,
                         refId,
                         refId,
                         distance
@@ -176,12 +198,12 @@ def calculate_medoid(
                 # There is some overlap, and we want refId also in this family
                 family[refId] = familyName
                 add_to_distance_matrix(
-                    family_distance_matrices[familyName],
-                    family_members[familyName],
+                    familyName,
                     queryId,
                     refId,
                     distance
                 )
+
         pbar.update(readSize)
     pbar.close()
     # For each family: Build a distance matrix, and then work out the medoid
@@ -191,57 +213,6 @@ def calculate_medoid(
         medoid_index = np.argmin(np_array.sum(axis=0))
         # Create a dictionary using the medoid as key and
         # the family_members as values
-        dict_medoids[family_members[familyName][medoid_index]] \
-            = family_members[familyName]
+        medoidName = family_members[familyName][medoid_index]
+        dict_medoids[medoidName] = family_members[familyName]
     return dict_medoids, family_distance_matrices
-
-
-def add_to_distance_matrix(distance_matrix, idList,
-                           refId, queryId, distance):
-    """
-    Adds the distance of refId-queryId to the distance matrix and index
-    ----------
-    distance_matrix
-        {fasta file name: distance matrix}
-    idList
-        list, fasta file name
-    refId
-        fasta file name
-    queryId
-        fasta file name
-    distance
-        float, between 0 and 1
-    returns
-    ----------
-    """
-    index1 = add_new_gene(distance_matrix, idList, refId)
-    index2 = add_new_gene(distance_matrix, idList, queryId)
-    distance_matrix[index1][index2] = distance
-    distance_matrix[index2][index1] = distance
-    return ()
-
-
-def add_new_gene(distance_matrix, idList, id) -> int:
-    """
-    Adds a distance matrix
-    ----------
-    distance_matrix
-        {fasta file name: distance matrix}
-    idList
-        list, fasta file name
-    id
-        fasta file name
-    returns
-    ----------
-    idList.index(gene)
-        int, index number of the gene
-    """
-    if id not in idList:
-        # Add to list
-        idList.append(id)
-        idList.index(id)
-        # Extend distance matrix: One new row, one new column
-        for row in distance_matrix:
-            row.append(0)
-        distance_matrix.append([0] * len(idList))
-    return idList.index(id)

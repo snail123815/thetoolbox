@@ -12,11 +12,14 @@ BUSCO_ENV: Path | None = Path.home() / 'genvs/quasan'
 PROKKA_ENV: Path | None = Path.home() / 'genvs/quasan'
 MASH_ENV: Path | None = Path.home() / 'genvs/phylophlan'
 BIGSCAPE_ENV: Path | None = Path.home() / 'genvs/bigscape'
-PFAM_DB: Path = Path.home() / 'dbMisc/antismash_databases/pfam/34.0'
+PFAM_DB: Path = \
+    sorted([p for p
+            in (Path.home() / 'dbMisc/antismash_databases/pfam').iterdir()
+            if p.is_dir()])[-1]
 
 
 def withActivateEnvCmd(cmd: str, condaEnv: Path | None = None,
-                      condaExe=CONDAEXE, shell=SHELL) -> str:
+                       condaExe=CONDAEXE, shell=SHELL) -> str:
     '''cmd = withActivateEnvCmd(cmd, condaEnv, condaExe, shell)
     Join commands that activate your environment and your command,
     return joined command:
