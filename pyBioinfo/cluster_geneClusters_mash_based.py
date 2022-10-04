@@ -179,14 +179,14 @@ def main():
     else:
         if not args.tmp.exists():
             args.tmp.mkdir(parents=True)
-        proteinFastaDir = args.tmp / 'proteinFastas'
+        proteinFastaDir = (args.tmp / 'proteinFastas').resolve()
         proteinMashDir = args.tmp / 'mashSketchAndDist'
         representativeGbksDir = args.tmp / 'representativeGbks'
         proteinFastaDir.mkdir(exist_ok=True)
         proteinMashDir.mkdir(exist_ok=True)
         representativeGbksDir.mkdir(exist_ok=True)
 
-    sketchFile = proteinMashDir / 'GC_PROT.msh'
+    sketchFile = (proteinMashDir / 'GC_PROT.msh').resolve()
     distanceTableFile = proteinMashDir / 'mash_output_GC.tab'
     mashTableFinishedFlagFile = proteinMashDir / 'distFinished'
     gbksListFile = proteinMashDir / 'gbks_list.pickle'
