@@ -124,12 +124,12 @@ def calculate_medoid(
         family_distance_matrices[familyName][index1][index2] = distance
         family_distance_matrices[familyName][index2][index1] = distance
         return ()
-    pbar = tqdm(total=inputDistanceTablePath.stat().st_size,
-                bar_format=r"{l_bar}{bar}| {n:,.0f}/{total:,.0f} {unit} " +
-                r"[{elapsed}<{remaining}, {rate_fmt}{postfix}]",
-                unit_scale=1 / 1048576, unit='MB',
-                desc="Generating families from distance file")
     with inputDistanceTablePath.open('r') as input:
+        pbar = tqdm(total=inputDistanceTablePath.stat().st_size,
+                    bar_format=r"{l_bar}{bar}| {n:,.0f}/{total:,.0f} {unit} " +
+                    r"[{elapsed}<{remaining}, {rate_fmt}{postfix}]",
+                    unit_scale=1 / 1048576, unit='MB',
+                    desc="Generating families from distance file")
         readSize = 0
         for idx, line in enumerate(input):
             readSize += sys.getsizeof(line) - 50  # length of '\n'
@@ -205,7 +205,7 @@ def calculate_medoid(
                 )
 
         pbar.update(readSize)
-    pbar.close()
+        pbar.close()
     # For each family: Build a distance matrix, and then work out the medoid
     for familyName in familyFiltered.keys():
         # Calculate the medoid from the distances
