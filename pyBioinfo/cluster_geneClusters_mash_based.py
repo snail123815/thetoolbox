@@ -1,6 +1,5 @@
 import argparse
 import os
-import shutil
 from multiprocessing import Pool
 from glob import glob
 from tqdm import tqdm
@@ -18,6 +17,7 @@ from pyBioinfo_modules.wrappers.mash \
 from pyBioinfo_modules.wrappers.bigscape \
     import runBigscape
 from tempfile import TemporaryDirectory
+import pickle
 
 
 class ClusterInfo(TypedDict):
@@ -172,44 +172,69 @@ def main():
     if args.tmp is None:
         fastaTempD = TemporaryDirectory()
         mashTempD = TemporaryDirectory()
-        gbkFamiliesTempD = TemporaryDirectory()
+        representativeGbksTempD = TemporaryDirectory()
         proteinFastaDir = Path(fastaTempD.name)
         proteinMashDir = Path(mashTempD.name)
-        gbkFamiliesDir = Path(gbkFamiliesTempD.name)
+        representativeGbksDir = Path(representativeGbksTempD.name)
     else:
         if not args.tmp.exists():
             args.tmp.mkdir(parents=True)
         proteinFastaDir = args.tmp / 'proteinFastas'
         proteinMashDir = args.tmp / 'mashSketchAndDist'
-        gbkFamiliesDir = args.tmp / 'gbkFamilies'
+        representativeGbksDir = args.tmp / 'representativeGbks'
         proteinFastaDir.mkdir(exist_ok=True)
         proteinMashDir.mkdir(exist_ok=True)
-        gbkFamiliesDir.mkdir(exist_ok=True)
+        representativeGbksDir.mkdir(exist_ok=True)
+
     sketchFile = proteinMashDir / 'GC_PROT.msh'
     distanceTableFile = proteinMashDir / 'mash_output_GC.tab'
     mashTableFinishedFlagFile = proteinMashDir / 'distFinished'
+    gbksListFile = proteinMashDir / 'gbks_list.pickle'
+    clusterInfoDictFile = proteinMashDir / 'clusters_info_dict.pickle'
+    familyMedoidDictFile = proteinMashDir / 'family_medoid_dict.pickle'
+    familyDistMatrixDictFile = proteinMashDir / 'family_dist_matrix_dict.pickle'
+    familyMedoidFinishedFlagFile = proteinMashDir / 'medoidFinished'
+
+    allRepresentativeGbksMovedFlagFile = proteinMashDir / 'ALLIN_rep_gbks'
+
+    args.outputPath.mkdir(exist_ok=True)
+    bigscapeOutput = args.outputPath / 'bigscape'
 
     try:
-        gbks = list(inputPath.glob(clusterGbkGlobTxt))
-        for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
-                      desc=(f'Gathering gbk files from {inputPath.name}')):
-            gbks.extend(Path(gbk) for gbk in
-                        glob(str(d / ('**/' + clusterGbkGlobTxt)),
-                        recursive=True))
+        if gbksListFile.exists():
+            with gbksListFile.open('rb') as fh:
+                gbks = pickle.load(fh)
+        else:
+            gbks = list(inputPath.glob(clusterGbkGlobTxt))
+            for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
+                          desc=(f'Gathering gbk files from {inputPath.name}')):
+                gbks.extend(Path(gbk) for gbk in
+                            glob(str(d / ('**/' + clusterGbkGlobTxt)),
+                            recursive=True))
+            if args.tmp is not None:
+                with gbksListFile.open('wb') as fh:
+                    pickle.dump(gbks, fh)
 
-        with Pool(args.cpus) as readGbkPool:
-            results = [
-                readGbkPool.apply_async(
-                    parseClusterGbk, (gbk, proteinFastaDir, i))
-                for i, gbk in enumerate(gbks)
-            ]
-            # clusterInfos: list[ClusterInfo] = [
-            #     r.get() for r in tqdm(results, desc='Parsing cluster info')
-            # ]
-            clusterInfoDict = {}
-            for r in tqdm(results, desc='Parsing cluster info'):
-                ci = r.get()
-                clusterInfoDict[ci['joinedProteinFastaFile'].name] = ci
+        if clusterInfoDictFile.exists():
+            with clusterInfoDictFile.open('rb') as fh:
+                clusterInfoDict = pickle.load(fh)
+        else:
+            with Pool(args.cpus) as readGbkPool:
+                results = [
+                    readGbkPool.apply_async(
+                        parseClusterGbk, (gbk, proteinFastaDir, i))
+                    for i, gbk in enumerate(gbks)
+                ]
+                # clusterInfos: list[ClusterInfo] = [
+                #     r.get() for r in tqdm(results, desc='Parsing cluster info')
+                # ]
+                clusterInfoDict = {}
+                for r in tqdm(results, desc='Parsing cluster info'):
+                    ci = r.get()
+                    clusterInfoDict[ci['joinedProteinFastaFile'].name] = ci
+            if args.tmp is not None:
+                with clusterInfoDictFile.open('wb') as fh:
+                    pickle.dump(clusterInfoDict, fh)
 
         if not mashTableFinishedFlagFile.exists():
             cwd = Path().resolve()
@@ -230,54 +255,50 @@ def main():
                 distanceTableFile,
                 nthreads=args.cpus,
             )
-            assert distanceTableFile.exists()
             mashTableFinishedFlagFile.touch()
+        assert distanceTableFile.exists()
 
-        print('Gather families and calculating medoid...')
-        dict_medoids, family_distance_matrice = \
-            calculate_medoid(distanceTableFile, 0.8)
+        if familyMedoidFinishedFlagFile.exists():
+            with familyMedoidDictFile.open('rb') as fh:
+                dict_medoids = pickle.load(fh)
+            with familyDistMatrixDictFile.open('rb') as fh:
+                family_distance_matrice = pickle.load(fh)
+        else:
+            print('Gather families and calculating medoid...')
+            dict_medoids, family_distance_matrice = calculate_medoid(
+                distanceTableFile,
+                0.8
+            )
+            if args.tmp is not None:
+                with familyMedoidDictFile.open('wb') as fh:
+                    pickle.dump(dict_medoids, fh)
+                with familyDistMatrixDictFile.open('wb') as fh:
+                    pickle.dump(family_distance_matrice, fh)
+                familyMedoidFinishedFlagFile.touch()
 
-        familyGbksDirs = []
-        for name, members in dict_medoids.items():
-            if len(members) > 1:
-                assert name in members
-                name = Path(name).with_suffix('').name
-                targetDir = gbkFamiliesDir / name
-                if targetDir.exists():
-                    shutil.rmtree(targetDir)
-                targetDir.mkdir()
-                for m in members:
-                    gbk = clusterInfoDict[m]['gbkFile']
-                    target = targetDir / gbk.name
-                    target.symlink_to(gbk.resolve())
-                familyGbksDirs.append(targetDir)
+        if not allRepresentativeGbksMovedFlagFile.exists():
+            for name in dict_medoids.keys():
+                repGbkFile = clusterInfoDict[name]['gbkFile']
+                moveToFile = representativeGbksDir / repGbkFile.name
+                moveToFile.symlink_to(repGbkFile.resolve())
+            allRepresentativeGbksMovedFlagFile.touch()
+        assert len(dict_medoids) == len([
+            f for f in representativeGbksDir.iterdir() if f.is_file()
+        ])
 
-        # args.outputPath.mkdir(exist_ok=True)
-        cpuDist = (1, 3)
-        bigscapePoolCpus = max(1, round(args.cpus * cpuDist[0] / sum(cpuDist)))
-        singleBigscapeRunCpus = -(args.cpus // -bigscapePoolCpus)
-        with Pool(bigscapePoolCpus) as bigscapePool:
-            results = [
-                bigscapePool.apply_async(
-                    runBigscape,
-                    (dir, args.outputPath / dir.name),
-                    kwds={
-                        'cpus': singleBigscapeRunCpus,
-                        'cutoffs': [0.2, ]
-                    }
-                ) for dir in familyGbksDirs
-            ]
-            bigscapeResults = [
-                r.get() for r
-                in tqdm(results, desc='BiGSCAPE runs')
-            ]
+        runBigscape(
+            representativeGbksDir, bigscapeOutput,
+            cpus=args.cpus,
+            cutoffs=[0.2, ],
+            silent=False
+        )
 
-        print('finish')  # break point
+        print('FINISH')  # break point
     finally:
         if args.tmp is None:
             fastaTempD.cleanup()
             mashTempD.cleanup()
-            gbkFamiliesTempD.cleanup()
+            representativeGbksTempD.cleanup()
 
 
 if __name__ == "__main__":
