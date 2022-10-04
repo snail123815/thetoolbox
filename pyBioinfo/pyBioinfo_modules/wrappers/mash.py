@@ -35,8 +35,11 @@ def mashSketchFiles(
     mashSketchRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
         shell=True, capture_output=True,
-        executable=shell, check=True
+        executable=shell
     )
+    assert mashSketchRun.returncode == 0, \
+        withActivateEnvCmd(cmd, mashEnv, condaExe, shell) + \
+        (mashSketchRun.stdout + mashSketchRun.stderr).decode()
     fileList.close()
     outputMsh = Path(str(output) + '.msh')
     assert outputMsh.is_file()
@@ -69,7 +72,11 @@ genome2.fna   genome3.fna  0.022276  0        456/1000
     cmd = f"mash dist -p {nthreads} {inputMsh} {inputMsh} > {outputFile}"
     mashDistRun = subprocess.run(
         withActivateEnvCmd(cmd, mashEnv, condaExe, shell),
-        shell=True, check=True, executable=shell)
+        capture_output=True,
+        shell=True, executable=shell)
+    assert mashDistRun.returncode == 0, \
+        withActivateEnvCmd(cmd, mashEnv, condaExe, shell) + \
+        (mashDistRun.stdout + mashDistRun.stderr).decode()
     assert outputFile.exists
     return outputFile
 
