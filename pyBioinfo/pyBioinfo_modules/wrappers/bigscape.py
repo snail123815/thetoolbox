@@ -1,33 +1,20 @@
 import subprocess
 import sys
 from pathlib import Path
+import shutil
 
 from pyBioinfo_modules.wrappers._environment_settings \
     import CONDAEXE, SHELL, BIGSCAPE_ENV, PFAM_DB, withActivateEnvCmd
 
-
-def whichBigscape(shell=SHELL):
-    try:
-        bigscapeExe = 'bigscape.py'
-        subprocess.run(withActivateEnvCmd(
-            'bigscape.py --version', BIGSCAPE_ENV, CONDAEXE, SHELL
-        ),
-            shell=True,
-            capture_output=True,
-            check=True, executable=shell)
-        return bigscapeExe
-    except subprocess.CalledProcessError:
-        bigscapeExe = 'bigscape'
-    subprocess.run(withActivateEnvCmd(
-        f'{bigscapeExe} --version', BIGSCAPE_ENV, CONDAEXE, SHELL
-    ),
-        shell=True,
-        capture_output=True,
-        check=True, executable=shell)
-    return bigscapeExe
-
-
-bigscapeExe = whichBigscape(shell=SHELL)
+try:
+    if BIGSCAPE_ENV is None:
+        bigscapeExe = Path([p for p in [
+            shutil.which('bigscape'), shutil.which('bigscape.py')
+        ] if p is not None][0])
+    else:
+        bigscapeExe = next((BIGSCAPE_ENV / 'bin').glob('bigscape*'))
+except (IndexError, StopIteration):
+    raise FileNotFoundError('bigscape executable not found.')
 
 
 def runBigscape(
