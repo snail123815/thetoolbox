@@ -91,6 +91,8 @@ Plug 'godlygeek/tabular'
 Plug 'plasticboy/vim-markdown'
 Plug 'mzlogin/vim-markdown-toc'
 
+Plug 'nvim-treesitter/nvim-treesitter', {'do': ':TSUpdate'}
+
 " List ends here. Plugins become visible to Vim after this call.
 call plug#end()
 
@@ -171,3 +173,15 @@ augroup end
 
 "}}}
 
+lua <<EOF
+require'nvim-treesitter.configs'.setup {
+    ensure_installed = { "python", "bash", "javascript", "markdown" },
+    sync_install = false,
+    auto_install = true,
+    highlight = {
+        enable = true,
+        disable = {},
+        additional_vim_regex_highlighting = false,
+    },
+}
+EOF
