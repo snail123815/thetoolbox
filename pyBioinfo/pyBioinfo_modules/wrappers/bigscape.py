@@ -10,9 +10,9 @@ try:
     if BIGSCAPE_ENV is None:
         bigscapeExe = Path([p for p in [
             shutil.which('bigscape'), shutil.which('bigscape.py')
-        ] if p is not None][0])
+        ] if p is not None][0]).resolve()
     else:
-        bigscapeExe = next((BIGSCAPE_ENV / 'bin').glob('bigscape*'))
+        bigscapeExe = next((BIGSCAPE_ENV / 'bin').glob('bigscape*')).resolve()
 except (IndexError, StopIteration):
     raise FileNotFoundError('bigscape executable not found.')
 
