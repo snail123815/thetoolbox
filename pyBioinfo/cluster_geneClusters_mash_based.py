@@ -154,6 +154,10 @@ def main():
                         help='Processes number', default=4)
     parser.add_argument('--tmp', type=Path,
                         help='temporary files folder', default=None)
+    parser.add_argument('--mashClusterRatio', type=float, default=0.8,
+                        help='Ratio of match/total for two BGC to be clustered')
+    parser.add_argument('--verboseBigscape', type=bool,
+                        help='add --verbose to bigscape run', default=False)
     parser.add_argument('--outputPath', type=Path,
                         help='Bigscape results', required=True)
 
@@ -267,7 +271,7 @@ def main():
             print('Gather families and calculating medoid...')
             dict_medoids, family_distance_matrice = calculate_medoid(
                 distanceTableFile,
-                0.8
+                args.mashClusterRatio
             )
             if args.tmp is not None:
                 with familyMedoidDictFile.open('wb') as fh:
@@ -290,7 +294,8 @@ def main():
             representativeGbksDir, bigscapeOutput,
             cpus=args.cpus,
             cutoffs=[0.2, ],
-            silent=False
+            silent=False,
+            verbose=args.verboseBigscape
         )
 
         print('FINISH')  # break point

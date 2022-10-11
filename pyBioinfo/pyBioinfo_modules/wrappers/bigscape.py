@@ -26,6 +26,7 @@ def runBigscape(
     bigscapeEnv=BIGSCAPE_ENV,
     pfamDb=PFAM_DB,
     condaExe=CONDAEXE,
+    verbose=False,
     shell=SHELL
 ) -> Path:
     if not outputPath.is_dir():
@@ -33,6 +34,8 @@ def runBigscape(
     cmd = f'{bigscapeExe} --mode auto -c {cpus}'
     cmd += f' --cutoffs {" ".join([str(c) for c in cutoffs])}'
     cmd += f' --pfam_dir {pfamDb}'
+    if verbose:
+        cmd += ' --verbose'
     cmd += f' -i {inputPath}'
     cmd += f' -o {outputPath}'
     # print(withActivateEnvCmd(cmd, bigscapeEnv, condaExe, shell))
