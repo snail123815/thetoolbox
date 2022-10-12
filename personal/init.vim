@@ -123,7 +123,8 @@ let g:python3_host_prog = 'python3'
 " 'plasticboy/vim-markdown'
 let g:vim_markdown_toc_autofit = 1
 let g:vim_markdown_math = 1
-let g:vim_markdown_folding_level = 2
+let g:vim_markdown_folding_level = 3
+let g:vim_markdown_folding_disabled = 0
 
 " 'mzlogin/vim-markdown-toc'
 let g:vmt_dont_insert_fence = 1
