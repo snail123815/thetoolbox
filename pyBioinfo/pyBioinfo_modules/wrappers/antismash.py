@@ -12,6 +12,18 @@ from pyBioinfo_modules.basic.decompress \
     import decompFileIfCompressed
 from pyBioinfo_modules.bio_sequences.bio_seq_file_extensions import FNA_EXTENSIONS
 import re
+from typing import Literal, TypedDict
+from Bio.SeqFeature import FeatureLocation
+
+
+class ClusterInfo(TypedDict):
+    gbkFile: Path
+    gcProducts: str
+    organism: str
+    fromSequence: str
+    coreRelativeLocs: list[FeatureLocation]
+    joinedProteinFastaFile: Path
+    fastaId: str
 
 
 def findClusterNumberStr(file: Path, numberOnly: bool = False) -> str | None:
@@ -29,7 +41,8 @@ antismashClusterGbkFileNameTest = 'NNNNNNNNNNNn.region001.gbk'
 clusterGbkGlobTxt = r'*region[0-9][0-9][0-9].gbk'
 assert PurePath(antismashClusterGbkFileNameTest).match(clusterGbkGlobTxt)
 clusterNumberPattern = re.compile(r"\.region[0-9]{3}\.gbk$")
-assert findClusterNumberStr(Path(antismashClusterGbkFileNameTest)) == 'region001'
+assert findClusterNumberStr(
+    Path(antismashClusterGbkFileNameTest)) == 'region001'
 
 
 def runAntismash(

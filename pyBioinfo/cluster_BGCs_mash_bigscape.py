@@ -11,23 +11,13 @@ from Bio.SeqRecord import SeqRecord
 import re
 from typing import Literal, TypedDict
 from pyBioinfo_modules.wrappers.antismash \
-    import findClusterNumberStr, clusterGbkGlobTxt
+    import findClusterNumberStr, clusterGbkGlobTxt, ClusterInfo
 from pyBioinfo_modules.wrappers.mash \
     import calculate_medoid, mashSketchFiles, mashDistance
 from pyBioinfo_modules.wrappers.bigscape \
     import runBigscape
 from tempfile import TemporaryDirectory
 import pickle
-
-
-class ClusterInfo(TypedDict):
-    gbkFile: Path
-    gcProducts: str
-    organism: str
-    fromSequence: str
-    coreRelativeLocs: list[FeatureLocation]
-    joinedProteinFastaFile: Path
-    fastaId: str
 
 
 def parseClusterGbk(
