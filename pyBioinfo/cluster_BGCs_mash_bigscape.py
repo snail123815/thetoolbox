@@ -4,14 +4,8 @@ from multiprocessing import Pool
 from glob import glob
 from tqdm import tqdm
 from pathlib import Path
-from Bio import SeqIO
-from Bio.Seq import Seq
-from Bio.SeqFeature import FeatureLocation
-from Bio.SeqRecord import SeqRecord
-import re
-from typing import Literal, TypedDict
 from pyBioinfo_modules.wrappers.antismash \
-    import findClusterNumberStr, clusterGbkGlobTxt, ClusterInfo
+    import clusterGbkGlobTxt, parseClusterGbk
 from pyBioinfo_modules.wrappers.mash \
     import calculate_medoid, mashSketchFiles, mashDistance
 from pyBioinfo_modules.wrappers.bigscape \
@@ -19,121 +13,6 @@ from pyBioinfo_modules.wrappers.bigscape \
 from tempfile import TemporaryDirectory
 import pickle
 
-
-def parseClusterGbk(
-    infile: Path,
-    proteinFastaDir: Path,
-    id: int | None = None,
-    nflank: int = 0,
-) -> ClusterInfo:
-    """Parses the genbank files for DNA, protein, cluster, organism
-    [Rewrote of parsegbkcluster() from BiG-MAP]
-    parameters
-    ----------
-    infile
-        Path of .gbk file
-    proteinFastaDir
-        Path of protein fastas to store joined proteins for each cluster
-    nflank
-        Number of CDS to flank the core regions
-    returns
-    ----------
-    DNA = DNA sequence
-    proteins = protein sequence
-    clustername = name of the cluster
-    organism = name of the organism
-    #cluster_enzymes = {loc:gene_kind}
-    """
-    proteins = []
-    gcProducts = []
-    cdsIndexs = []
-    coreIndexs = []
-    coreRelativeLocs = []
-    records = list(SeqIO.parse(infile, "genbank"))
-    assert len(records) == 1
-    record = records[0]
-    for i, feature in enumerate(record.features):
-        # Parsing the regionname, part of antismash output
-        if "region" in feature.type:
-            if "product" in feature.qualifiers:
-                for product in feature.qualifiers["product"]:
-                    gcProducts.append(product)
-        # Parsing the protein sequence
-        if feature.type == "CDS":
-            cdsIndexs.append(i)
-            # remembering every CDS gene index
-            try:
-                proteins.append(feature.qualifiers['translation'][0])
-            except KeyError:
-                pass
-            # Parsing the relative core locations
-            try:
-                if feature.qualifiers['gene_kind'][0] == "biosynthetic":
-                    coreIndexs.append(i)
-            except KeyError:
-                pass
-
-    if len(coreIndexs) > 0:
-        if cdsIndexs.index(min(coreIndexs)) - nflank < 0 or \
-                cdsIndexs.index(max(coreIndexs)) + nflank + 1 > len(cdsIndexs):
-            print(
-                "!!!flank_genes (-f) is higher than the number of flanking " +
-                f"genes in the cluster of file: {infile}, " +
-                "using whole gene cluster instead!!!"
-            )
-        if nflank == 0:
-            coreRelativeLocs = [
-                record.features[i].location for i in coreIndexs]
-        else:
-            if cdsIndexs.index(min(coreIndexs)) - nflank >= 0:
-                core_region = cdsIndexs[
-                    cdsIndexs.index(min(coreIndexs)) -
-                    nflank:cdsIndexs.index(max(coreIndexs)) + nflank + 1
-                ]
-            else:
-                core_region = cdsIndexs[0:cdsIndexs.index(
-                    max(coreIndexs)) + nflank + 1]
-            coreRelativeLocs = [
-                record.features[i].location for i in core_region]
-
-    organism = record.description
-    # Parsing organism name
-    # The attr. description is from "DEFINATION" line for gbk record
-    # biopython/Bio/GenBank/__init__.py line 764
-    # in class _FeatureConsumer(_BaseGenBankConsumer)
-    if " " in organism:
-        organism = "_".join(organism.split(",")[0].split())
-    organism = re.sub(f'strain', '', organism)
-    organism = re.sub(f'[()"]+', '', organism)
-    organism = re.sub(f'[\\/]+', '-', organism)
-    organism = re.sub(f'[.]+', '.', organism)
-    organism = re.sub(f'[_]+', '_', organism)
-
-    # write to protein fasta file
-    joinProteins = Seq(''.join(proteins))
-    regionAndNumber = findClusterNumberStr(infile)
-    fromSequence = infile.name.split(regionAndNumber)[0][:-1]
-    if id is None:
-        proteinFastaFileName = \
-            f"GC_PROT-{fromSequence}-{regionAndNumber}" + ".fasta"
-    else:
-        proteinFastaFileName = f"P{id}"
-    fastaId = f"{organism}|{fromSequence}|" + \
-        f"GC_PROT--{regionAndNumber}" + f"--Entryname={':'.join(gcProducts)}"
-    proteinFastaFile = proteinFastaDir / proteinFastaFileName
-    SeqIO.write(SeqRecord(joinProteins, id=fastaId, description=""),
-                proteinFastaFile, 'fasta')
-    assert proteinFastaFile.is_file()
-
-    return ClusterInfo(
-        gbkFile=infile,
-        gcProducts=":".join(gcProducts),
-        organism=organism,
-        fromSequence=fromSequence,
-        coreRelativeLocs=coreRelativeLocs,
-        joinedProteinFastaFile=proteinFastaFile,
-        fastaId=fastaId
-    )
 
 
 def main():
