@@ -14,6 +14,45 @@ from tempfile import TemporaryDirectory
 import pickle
 
 
+def globFilesSafely(
+    sourceDir: Path, globPattern: str,
+    resultPickle: Path | None = None,
+    reload: bool = False, showProgress: bool = False
+) -> list[Path]:
+    """Make sure glob files will follow symlinks
+    In pathlib.Path, the glob() function do not follow symlink:
+    [pathlib.Path.glob does not follow symlinks · Issue #77609 · python/cpython
+    (github.com)](https://github.com/python/cpython/issues/77609)
+    But this is hardly a bug because this is a system behaviour.
+    However this will happily follow symlinks:
+    ```python
+    from glob import glob
+    glob(str, recursive=True)
+    ```
+    """
+    if resultPickle is not None and resultPickle.is_file() and not reload:
+        with resultPickle.open('rb') as fh:
+            return pickle.load(fh)
+    else:
+        files = list(sourceDir.glob(globPattern))
+        if showProgress:
+            for d in tqdm(
+                [d for d in sourceDir.iterdir() if d.is_dir()],
+                desc=(f'Gathering "{globPattern}" files from {sourceDir.name}')
+            ):
+                files.extend(Path(f) for f in
+                             glob(str(d / ('**/' + globPattern)),
+                                  recursive=True))
+        else:
+            for d in [d for d in sourceDir.iterdir() if d.is_dir()]:
+                files.extend(Path(f) for f in
+                             glob(str(d / ('**/' + globPattern)),
+                                  recursive=True))
+        if resultPickle is not None:
+            with resultPickle.open('wb') as fh:
+                pickle.dump(files, fh)
+    return files
+
 
 def main():
     parser = argparse.ArgumentParser()
@@ -74,19 +113,11 @@ def main():
     bigscapeOutput = args.outputPath / 'bigscape'
 
     try:
-        if gbksListFile.exists():
-            with gbksListFile.open('rb') as fh:
-                gbks = pickle.load(fh)
-        else:
-            gbks = list(inputPath.glob(clusterGbkGlobTxt))
-            for d in tqdm([d for d in inputPath.iterdir() if d.is_dir()],
-                          desc=(f'Gathering gbk files from {inputPath.name}')):
-                gbks.extend(Path(gbk) for gbk in
-                            glob(str(d / ('**/' + clusterGbkGlobTxt)),
-                            recursive=True))
-            if args.tmp is not None:
-                with gbksListFile.open('wb') as fh:
-                    pickle.dump(gbks, fh)
+        gbks = globFilesSafely(
+            inputPath, clusterGbkGlobTxt,
+            (gbksListFile if args.tmp is not None else None),
+            showProgress=True
+        )
 
         if clusterInfoDictFile.exists():
             with clusterInfoDictFile.open('rb') as fh:
@@ -98,9 +129,6 @@ def main():
                         parseClusterGbk, (gbk, proteinFastaDir, i))
                     for i, gbk in enumerate(gbks)
                 ]
-                # clusterInfos: list[ClusterInfo] = [
-                #     r.get() for r in tqdm(results, desc='Parsing cluster info')
-                # ]
                 clusterInfoDict = {}
                 for r in tqdm(results, desc='Parsing cluster info'):
                     ci = r.get()
