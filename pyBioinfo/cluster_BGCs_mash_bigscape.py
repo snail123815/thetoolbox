@@ -34,8 +34,9 @@ def globFilesSafely(
         with resultPickle.open('rb') as fh:
             return pickle.load(fh)
     else:
-        files = list(sourceDir.glob(globPattern))
         if showProgress:
+            files = list(sourceDir.glob(globPattern)) # Will follow symlinks
+            # just like glob(str(sourceDir/globPattern)), but return list[Path]
             for d in tqdm(
                 [d for d in sourceDir.iterdir() if d.is_dir()],
                 desc=(f'Gathering "{globPattern}" files from {sourceDir.name}')
@@ -44,10 +45,10 @@ def globFilesSafely(
                              glob(str(d / ('**/' + globPattern)),
                                   recursive=True))
         else:
-            for d in [d for d in sourceDir.iterdir() if d.is_dir()]:
-                files.extend(Path(f) for f in
-                             glob(str(d / ('**/' + globPattern)),
-                                  recursive=True))
+            files = [
+                Path(f) for f in
+                glob(str(sourceDir/("**/"+globPattern)), recursive=True)
+            ]
         if resultPickle is not None:
             with resultPickle.open('wb') as fh:
                 pickle.dump(files, fh)
