@@ -12,10 +12,13 @@ BUSCO_ENV: Path | None = Path.home() / 'genvs/quasan'
 PROKKA_ENV: Path | None = Path.home() / 'genvs/quasan'
 MASH_ENV: Path | None = Path.home() / 'genvs/phylophlan'
 BIGSCAPE_ENV: Path | None = Path.home() / 'genvs/bigscape'
-PFAM_DB: Path = \
-    sorted([p for p
-            in (Path.home() / 'dbMisc/antismash_databases/pfam').iterdir()
-            if p.is_dir()])[-1]
+PFAM_DB: Path | None = None
+try:
+    PFAM_DB = sorted([p for p
+                      in (Path.home() / 'dbMisc/antismash_databases/pfam'
+                          ).iterdir() if p.is_dir()])[-1]
+except FileNotFoundError:
+    pass
 
 
 def withActivateEnvCmd(cmd: str, condaEnv: Path | None = None,

@@ -33,7 +33,8 @@ def runBigscape(
         outputPath.mkdir(parents=True, exist_ok=False)
     cmd = f'{bigscapeExe} --mode auto -c {cpus}'
     cmd += f' --cutoffs {" ".join([str(c) for c in cutoffs])}'
-    cmd += f' --pfam_dir {pfamDb}'
+    if pfamDb is not None:
+        cmd += f' --pfam_dir {pfamDb}'
     if verbose:
         cmd += ' --verbose'
     cmd += f' -i {inputPath}'
