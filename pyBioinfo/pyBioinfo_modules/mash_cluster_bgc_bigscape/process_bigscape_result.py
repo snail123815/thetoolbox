@@ -3,6 +3,7 @@ from pyBioinfo_modules.wrappers.antismash import ClusterInfo
 import pandas as pd
 from typing import cast
 
+
 def findFamily(
     dict_medoids: dict[str, list[str]],
     clusterInfoDict: dict,

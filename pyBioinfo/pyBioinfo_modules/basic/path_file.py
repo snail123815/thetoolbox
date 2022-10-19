@@ -3,6 +3,7 @@ import pickle
 from glob import glob
 from tqdm import tqdm
 
+
 def findStartLine(csvFile: Path) -> int:
     with csvFile.open('r') as file:
         for i, line in enumerate(file):
@@ -33,7 +34,7 @@ def globFilesSafely(
             return pickle.load(fh)
     else:
         if showProgress:
-            files = list(sourceDir.glob(globPattern)) # Will follow symlinks
+            files = list(sourceDir.glob(globPattern))  # Will follow symlinks
             # just like glob(str(sourceDir/globPattern)), but return list[Path]
             for d in tqdm(
                 [d for d in sourceDir.iterdir() if d.is_dir()],
@@ -45,7 +46,7 @@ def globFilesSafely(
         else:
             files = [
                 Path(f) for f in
-                glob(str(sourceDir/("**/"+globPattern)), recursive=True)
+                glob(str(sourceDir / ("**/" + globPattern)), recursive=True)
             ]
         if resultPickle is not None:
             with resultPickle.open('wb') as fh:

@@ -30,7 +30,7 @@ def calHash(*args) -> str:
     def orderDict(di):
         try:
             d = di.copy()
-        except:
+        except BaseException:
             d = di
         if isinstance(d, dict):
             od = OrderedDict(sorted(d.items()))
@@ -83,22 +83,22 @@ def calHash(*args) -> str:
 
 
 # TEST
-if __name__=="__main__":
+if __name__ == "__main__":
     import numpy as np
     import warnings
     warnings.filterwarnings("ignore")
     tmpfile = 'abc.tmp'
     with open(tmpfile, 'wb') as tf:
         tf.write('iviviv'.encode())
-    a = pd.DataFrame(dict(a=[1,2],b=[3,4]), index=[1,2])
+    a = pd.DataFrame(dict(a=[1, 2], b=[3, 4]), index=[1, 2])
     b = dict(x='iv', y='83', z=dict(i=0, u=5, k=dict(kj='kj', hs='qf')))
     c = 'avb'
     d = 1
     e = PLS()
-    e.fit(np.linspace(1,100,50).reshape(-1,2).T, [[1],[1.5]])
+    e.fit(np.linspace(1, 100, 50).reshape(-1, 2).T, [[1], [1.5]])
     f = PCA()
-    f.fit(np.linspace(4,5,100).reshape(-1,5))
-    ha = calHash(a,b,c,d,e,f, tmpfile) 
+    f.fit(np.linspace(4, 5, 100).reshape(-1, 5))
+    ha = calHash(a, b, c, d, e, f, tmpfile)
     correctHa = '89c28a'
     if ha == correctHa:
         print("Test OK")

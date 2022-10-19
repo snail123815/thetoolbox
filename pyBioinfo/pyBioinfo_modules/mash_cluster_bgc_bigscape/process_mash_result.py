@@ -12,11 +12,13 @@ class mashBGC_ClusteringResult:
         family_distance_matrice: dict[str, list[list[float]]] = pickle.load(fh)
         dict_medoids: dict[str, list[str]] = pickle.load(fh)
 
-    
+
 
     """
+
     def __init__(self, ) -> None:
         pass
+
 
 def calculate_medoid(
     inputDistanceTablePath: Path,  # output file (return) of mashDistance()

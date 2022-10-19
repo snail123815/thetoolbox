@@ -5,6 +5,7 @@ from pyBioinfo_modules.basic.decompress \
     import decompFileIfCompressed, getSuffixIfCompressed
 from pyBioinfo_modules.bio_sequences.bio_seq_file_extensions import GBK_EXTENSIONS
 
+
 def gbkToGff(path: Path) -> Path:
     assert getSuffixIfCompressed(path).lower() in GBK_EXTENSIONS
     gbkPath, didUnzip = decompFileIfCompressed(path)
