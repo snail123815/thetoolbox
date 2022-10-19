@@ -1,13 +1,14 @@
 import argparse
 import os
 from multiprocessing import Pool
-from glob import glob
 from tqdm import tqdm
 from pathlib import Path
 from pyBioinfo_modules.wrappers.antismash \
     import clusterGbkGlobTxt, parseClusterGbk
 from pyBioinfo_modules.wrappers.mash \
-    import calculate_medoid, mashSketchFiles, mashDistance
+    import mashSketchFiles, mashDistance
+from pyBioinfo_modules.mash_cluster_bgc_bigscape.process_mash_result\
+    import calculate_medoid
 from pyBioinfo_modules.wrappers.bigscape \
     import runBigscape
 from pyBioinfo_modules.basic.path_file import globFilesSafely
