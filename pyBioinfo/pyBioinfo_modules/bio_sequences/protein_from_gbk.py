@@ -1,4 +1,3 @@
-import subprocess
 import os
 from pathlib import Path
 
@@ -11,6 +10,7 @@ from Bio.Data.CodonTable import TranslationError
 from pyBioinfo_modules.basic.decompress import decompFileIfCompressed
 from pyBioinfo_modules.bio_sequences.bio_seq_file_extensions \
     import GBK_EXTENSIONS
+
 
 def getProteins(seqObj, codonTable=11):
     """Extract proteins from a SeqRecord.""" \

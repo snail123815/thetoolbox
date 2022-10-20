@@ -36,7 +36,7 @@ def decompressFile(filePath: Path) -> Path:
             [prog, '-dc', filePath.resolve()],
             stdout=rf,
             stderr=subprocess.PIPE
-        )   
+        )
     if not resultFilePath.exists():
         raise FileNotFoundError('\n'.join([
             f'Unzip file {filePath} failed: no output file found:',

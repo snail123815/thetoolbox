@@ -7,7 +7,6 @@ from pyBioinfo_modules.wrappers._environment_settings import \
     SHELL, CONDAEXE, PROKKA_ENV, withActivateEnvCmd
 
 
-
 def runProkka(
     fastaPath: Path,
     gcode: int = 11,
@@ -47,7 +46,7 @@ def runProkka(
                       [prefix, genus, species, strain, timeStr]
                       if item is not None)
     if output is None:
-        outdir = fastaPath.parent/(fastaPath.stem + '_prokka')
+        outdir = fastaPath.parent / (fastaPath.stem + '_prokka')
     else:
         outdir = output
     cmd = ('prokka --compliant --addgenes --mincontiglen 200 --rfam'
