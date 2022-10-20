@@ -70,8 +70,9 @@ def main():
 
         # gather related BGC paths
         collectedBgcNetworkDf = pd.concat(
-            [bigscapeRelatedBgcsNetworkDict.values()], axis=0).reset_index()\
-            .drop_duplicates().set_index(collectedBgcNetworkDf.index.name)
+            list(bigscapeRelatedBgcsNetworkDict.values()), axis=0).reset_index()\
+            .drop_duplicates()
+        collectedBgcNetworkDf.set_index(collectedBgcNetworkDf.columns[0])
         collectedBgcs = pd.concat([
             collectedBgcNetworkDf.index.to_series(),
             collectedBgcNetworkDf.iloc[:, 0]
@@ -99,7 +100,8 @@ def main():
     runBigscape(
         collectedBgcGatherPath,
         bigscapeOut,
-        cpus=20
+        cpus=20,
+        cutoffs=[0.2,0.3,0.4,0.5]
     )
 
     print('FINISH')
