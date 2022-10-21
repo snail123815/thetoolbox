@@ -22,15 +22,16 @@ notebookSync() {
 _notebookSync() {
 	echo
 	local NOTEBOOK=$1
+    local COMMENT=$2
 	echo "PATH to notebook:"
 	echo $NOTEBOOK
 	echo
-	local COMMENT=${:-$(date)}
-	echo Comment is: "$COMMENT"
 	if [ "$COMMENT" = "" ]; then
-		echo succeed
+        COMMENT=${:-$(date)}" from pc"
 	fi
+	echo Comment is: "$COMMENT"
 	cd $NOTEBOOK
+    git fetch
 	git pull
 	git add .
 	git commit -m $COMMENT
