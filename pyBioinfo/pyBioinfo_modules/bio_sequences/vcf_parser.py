@@ -2,7 +2,8 @@ from pathlib import Path
 from typing import TypedDict, NotRequired, cast, Literal
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
-from Bio.SeqFeature import FeatureLocation, ExactPosition
+from Bio.SeqFeature import FeatureLocation, ExactPosition, SeqFeature
+from collections.abc import Iterable
 
 
 class VarianceData(TypedDict):
@@ -92,15 +93,20 @@ def filterVarianceData(
 def applyVarianceDataOnSeqRecord(
     varianceDatas: list[VarianceData], seqRecord: SeqRecord, searchFrom: int = 0
 ) -> SeqRecord:
-    assert all(varianceData['CHROM'] == seqRecord.id
-               for varianceData in varianceDatas)
+    if not all(varianceData['CHROM'] == seqRecord.id
+               for varianceData in varianceDatas):
+        noMatch = [varianceData["CHROM"] for varianceData in varianceDatas
+                   if varianceData["CHROM"] != seqRecord.id][0]
+        raise AssertionError(
+            f'Source sequence ID is {seqRecord.id}, it does not match '
+            f'in .vcf file: {noMatch}'
+        )
     assert all(seqRecord.seq[varianceData['POS'] - 1].lower() ==
                varianceData['REF'][0].lower()
                for varianceData in varianceDatas), (
         'Reference nucleotide do not match variance data')
 
-    newSeqRecord = seqRecord.copy()
-    features = seqRecord.features
+    newSeqRecord = seqRecord[:]
     # https://www.insdc.org/submitting-standards/feature-table/#7.3
     excludeQualifiers = [
         'codon_start', 'altitude', 'anticodon', 'artificial_location',
@@ -114,44 +120,59 @@ def applyVarianceDataOnSeqRecord(
         'isolate', 'isolation_source', 'lab_host', 'lat_lon',
         'linkage_evidence', 'macronuclear', 'map', 'mating_type',
         'metagenome_source', 'mobile_element_type', 'mod_base', 'mol_type',
-        'number', 'operon', 'organelle', 'organism', 'pop_variant',
-        'ribosomal_slippage', 'rpt_family', 'rpt_type', 'rpt_unit_range',
-        'satellite', 'serotype', 'serovar', 'sex', 'specimen_voucher',
-        'strain', 'sub_clone', 'sub_species', 'sub_strain', 'tag_peptide',
-        'tissue_lib', 'tissue_type', 'transgenic', 'translation',
-        'transl_except', 'transl_table', 'trans_splicing' 'type_material',
-        'variety'
+        'number', 'operon', 'organelle', 'pop_variant', 'ribosomal_slippage',
+        'rpt_family', 'rpt_type', 'rpt_unit_range', 'satellite', 'serotype',
+        'serovar', 'sex', 'specimen_voucher', 'strain', 'sub_clone',
+        'sub_species', 'sub_strain', 'tag_peptide', 'tissue_lib', 'tissue_type',
+        'transgenic', 'translation', 'transl_except', 'transl_table',
+        'trans_splicing' 'type_material', 'variety'
     ]
+
     for varianceData in varianceDatas:
-        start = varianceData['POS'] - 1
+        accumulatedLenDiff = len(newSeqRecord) - len(seqRecord) 
+        assert ',' not in varianceData['ALT'], (
+            'Mixed VCF record is ambiguous'
+            f' when appling to sequence, consider remove them before applying.'
+            f'{varianceData}'
+        )
+        allFeatures_startSorted = sorted(
+            newSeqRecord.features, key=lambda f: f.location.start
+        )
+        allFeatures_endSorted = sorted(
+            newSeqRecord.features, key=lambda f: f.location.end
+        )
+        start = varianceData['POS'] - 1 + accumulatedLenDiff
+        assert newSeqRecord[start].lower() == varianceData['REF'][0].lower()
         length = len(varianceData['REF'])
         upStreamSeq = newSeqRecord[:start]
+        nFeaturesUpStream = len(upStreamSeq.features)
         downStreamSeq = newSeqRecord[start + length:]
+        nFeaturesDownStream = len(downStreamSeq.features)
         newSeqRecord = upStreamSeq + Seq(varianceData['ALT']) + downStreamSeq
-        affectedFeatures = set(
-            newSeqRecord.features
-        ).symmetric_difference(set(features))
-        mutFeatures = []
-        diffLen = len(varianceData['ALT']) - len(varianceData['REF'])
+        posDiff = len(varianceData['ALT']) - len(varianceData['REF'])
+
+        # Magick:
+        if nFeaturesDownStream == 0:
+            upStreamFeatures = set(allFeatures_startSorted)
+        else:
+            upStreamFeatures = set(
+                allFeatures_startSorted[:-nFeaturesDownStream])
+        downStreamFeatures = set(allFeatures_endSorted[nFeaturesUpStream:])
+        affectedFeatures: list[SeqFeature] = list(
+            upStreamFeatures.intersection(downStreamFeatures))
 
         # add affected features back
+        mutFeatures = []
         for feat in affectedFeatures:
             newLoc = FeatureLocation(
                 feat.location.start,
-                feat.location.end + diffLen,
+                feat.location.end + posDiff,
                 feat.location.strand
             )
             newFeat = feat
             newFeat.location = newLoc
 
             for qualifier, contents in newFeat.qualifiers.items():
-                # white list
-                if qualifier in excludeQualifiers:
-                    continue
-                newContents = []
-                for content in contents:
-                    newContents.append('MUTATED_' + content)
-                newFeat.qualifiers[qualifier] = newContents
                 if qualifier == 'translation' and newFeat.type == 'CDS':
                     newDna = newSeqRecord[
                         newFeat.location.start: newFeat.location.end
@@ -164,41 +185,57 @@ def applyVarianceDataOnSeqRecord(
                         )
                     except IndexError:
                         translateTable = 'Standard'
+                    newTranslate = newDna[:len(newDna) // 3 * 3].translate(
+                        translateTable, cds=False,
+                        stop_symbol='*'
+                    ).seq
+                    if "*" in newTranslate:
+                        newTranslate = newTranslate.split('*')[0]
+                    else:
+                        newTranslate += '...'
+                    if newTranslate[0].lower() == 'v' and translateTable == 11:
+                        if newTranslate[0].islower():
+                            newTranslate = 'm' + newTranslate[1:]
+                        else:
+                            newTranslate = 'M' + newTranslate[1:]
+
+                    newFeat.qualifiers[qualifier] = [newTranslate, ]
+                # white list
+                if qualifier in excludeQualifiers:
+                    continue
+                if any(c.startswith("MUTATED_") for c in contents):
+                    newFeat.qualifiers[qualifier] = contents
+                else:
                     newFeat.qualifiers[qualifier] = [
-                        newDna.translate(
-                            translateTable, to_stop=True, cds=False
-                        )
-                    ]
-
+                        'MUTATED_' + c for c in contents]
             mutFeatures.append(newFeat)
-        newSeqRecord.features.append(mutFeatures)
 
-    # check if there is features in this region
-    # for i, feat in enumerate(seqRecord.features[searchFrom:]):
-    #     if len(feat) == len(seqRecord):
-    #         continue
-    #     if varianceData['POS'] < feat.location.start:
-    #         continue
-    #     elif feat.location.start <= varianceData['POS'] <= feat.location.end:
-    #         newSearchFrom = searchFrom + i
-    #     else:
-    #         newSearchFrom = searchFrom + i
+        newSeqRecord.features.extend(mutFeatures)
+        assert len(newSeqRecord.features) == len(seqRecord.features)
+    newSeqRecord.features = sorted(
+        sorted(
+            newSeqRecord.features,
+            key=lambda feat: feat.type, reverse=True # gene ahead of CDS
+        ),
+        key=lambda feat: feat.location.start
+    )
+    return newSeqRecord
 
 
 def applyVariancesOnSeqRecords(
     varianceDatas: list[VarianceData],
-    seqRecordDict: dict[str, SeqRecord]
+    seqRecords: Iterable[SeqRecord]
 ) -> dict[str, SeqRecord]:
     variantSeqRecordDict: dict[str, SeqRecord] = {}
     totalN = 0
-    for seqid, seqRec in seqRecordDict.items():
+    for seqRec in seqRecords:
+        seqid = seqRec.id
         varianceDatas_specific = [
             varianceData for varianceData in varianceDatas
             if varianceData['CHROM'] == seqid
         ]
-        for varianceData in varianceDatas_specific:
-
-            pass
-    for varianceData in varianceDatas:
-        pass
+        variantSeqRecordDict[seqid] = applyVarianceDataOnSeqRecord(
+            varianceDatas_specific, seqRec
+        )
+        totalN += len(varianceDatas_specific)
     return variantSeqRecordDict

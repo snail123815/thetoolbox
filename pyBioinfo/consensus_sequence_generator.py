@@ -18,15 +18,11 @@ def main():
 
     varianceDatas = vcfParser(args.vcf)
 
-    seqRecordDict = {
-        rec.id: rec for rec in SeqIO.parse(args.genome, 'genbank')
-    }
-
     variantSeqRecordDict = applyVariancesOnSeqRecords(
-        varianceDatas, seqRecordDict
+        varianceDatas, SeqIO.parse(args.genome, 'genbank')
     )
 
-    SeqIO.write(variantSeqRecordDict.values(), args.output)
+    SeqIO.write(variantSeqRecordDict.values(), args.output, 'genbank')
 
 
 if __name__ == '__main__':

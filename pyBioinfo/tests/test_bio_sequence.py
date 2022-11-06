@@ -1,8 +1,11 @@
 import unittest
 from pathlib import Path
+from Bio import SeqIO
+from Bio.SeqFeature import SeqFeature, FeatureLocation
 
 from pyBioinfo_modules.bio_sequences.vcf_parser import (
-    vcfParser, VarianceData, essentialVcfColumns
+    vcfParser, VarianceData, essentialVcfColumns,
+    applyVarianceDataOnSeqRecord, applyVariancesOnSeqRecords
 )
 
 
@@ -86,3 +89,48 @@ class Test_vcfParser(unittest.TestCase):
         self.assertIn(anotherVd, compvcfData_2)
         self.assertTrue(all('FORMAT' in vd for vd in compvcfData_1))
         self.assertTrue(all('SAMPLES' in vd for vd in compvcfData_1))
+
+    def test_applyVariantOneRecord(self):
+        # Which features are changed
+        # Translation changes:
+        #   Translation change
+        #   Stop codon
+        #   Loss of stop codon
+
+        miniVcf = Path('tests/test_data/vcf/minimal_3.vcf')
+        seqRec = SeqIO.read('tests/test_data/vcf/minimal_3.gbk', 'genbank')
+        consensusSeqRec = SeqIO.read(
+            'tests/test_data/vcf/minimal_3_consensus.gbk', 'genbank')
+        vcfData = vcfParser(miniVcf)
+
+        appliedRec = applyVarianceDataOnSeqRecord(vcfData, seqRec)
+        self.assertEqual(len(appliedRec), 2002)
+        self.assertEqual(appliedRec.seq, consensusSeqRec.seq)
+        self.assertEqual(len(appliedRec.features),
+                         len(consensusSeqRec.features))
+        for a, b in zip(appliedRec.features, consensusSeqRec.features):
+            self.assertEqual(a.type, b.type)
+            self.assertEqual(a.location, b.location)
+            self.assertEqual(a.qualifiers, b.qualifiers)
+
+    def test_applyVariantMultipleRecords(self):
+        # Multiple sequences in one file (.vcf and .gbk)
+        # Ability to follow length mutation during the run.
+
+        compVcf = Path('tests/test_data/vcf/complex_3.vcf')
+        seqRecs = SeqIO.parse('tests/test_data/vcf/complex_3.gbk', 'genbank')
+        consensusSeqRecs = SeqIO.parse(
+            'tests/test_data/vcf/complex_3_consensus.gbk', 'genbank')
+        variantSeqRecordDict = applyVariancesOnSeqRecords(
+            vcfParser(compVcf), seqRecs
+        )
+
+        self.assertListEqual(sorted(list(variantSeqRecordDict.keys())),
+                             ['AL645882_8.8', 'AL645882_9.9'])
+        self.assertEqual(len(variantSeqRecordDict['AL645882_8.8']), 1031099)
+        self.assertEqual(len(variantSeqRecordDict['AL645882_9.9']), 675189)
+        for s, cs in zip(['AL645882_8.8', 'AL645882_9.9'], consensusSeqRecs):
+            for a, b in zip(variantSeqRecordDict[s].features, cs.features):
+                self.assertEqual(a.type, b.type)
+                self.assertEqual(a.location, b.location)
+                self.assertEqual(a.qualifiers, b.qualifiers)
