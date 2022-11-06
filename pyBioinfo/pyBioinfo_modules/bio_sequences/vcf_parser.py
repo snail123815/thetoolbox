@@ -240,6 +240,7 @@ def applyVariancesOnSeqRecords(
     Prokaryotes only: Intron and exon are not considered in this function.
     '''
     variantSeqRecordDict: dict[str, SeqRecord] = {}
+    print(f'There are {len(varianceDatas)} to apply.')
     totalN = 0
     for seqRec in seqRecords:
         seqid = seqRec.id
@@ -247,8 +248,11 @@ def applyVariancesOnSeqRecords(
             varianceData for varianceData in varianceDatas
             if varianceData['CHROM'] == seqid
         ]
+        print(f'Will apply {len(varianceDatas_specific)} variances to '
+        f'{seqid}')
         variantSeqRecordDict[seqid] = applyVarianceDataOnSeqRecord(
             varianceDatas_specific, seqRec
         )
         totalN += len(varianceDatas_specific)
+    print(f'Applied {totalN} variances.')
     return variantSeqRecordDict
