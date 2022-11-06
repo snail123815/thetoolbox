@@ -1,8 +1,8 @@
 from pathlib import Path
-from typing import TypedDict, NotRequired, cast, Literal
+from typing import TypedDict, NotRequired, Literal
 from Bio.SeqRecord import SeqRecord
 from Bio.Seq import Seq
-from Bio.SeqFeature import FeatureLocation, ExactPosition, SeqFeature
+from Bio.SeqFeature import FeatureLocation
 from collections.abc import Iterable
 
 
@@ -91,8 +91,11 @@ def filterVarianceData(
 
 
 def applyVarianceDataOnSeqRecord(
-    varianceDatas: list[VarianceData], seqRecord: SeqRecord, searchFrom: int = 0
-) -> SeqRecord:
+        varianceDatas: list[VarianceData], seqRecord: SeqRecord) -> SeqRecord:
+    '''
+    Prokaryotes only: Intron and exon are not considered in this function.
+    Multiple records with the same POS might break or produce false result
+    '''
     if not all(varianceData['CHROM'] == seqRecord.id
                for varianceData in varianceDatas):
         noMatch = [varianceData["CHROM"] for varianceData in varianceDatas
@@ -127,12 +130,19 @@ def applyVarianceDataOnSeqRecord(
         'transgenic', 'translation', 'transl_except', 'transl_table',
         'trans_splicing' 'type_material', 'variety'
     ]
+    
+    # Valid VCF file do not need this step. But who knows.
+    varianceDatas = sorted(varianceDatas, key=lambda vd: vd['POS'])
 
-    for varianceData in varianceDatas:
-        accumulatedLenDiff = len(newSeqRecord) - len(seqRecord) 
+    for i, varianceData in enumerate(varianceDatas):
+        if i > 0:
+            assert varianceDatas[i-1]['POS'] < varianceData['POS'], (
+                'Multiple records at the same position is not supported\n'
+                f'{varianceData}\n{varianceDatas[i-1]}'
+            )
         assert ',' not in varianceData['ALT'], (
-            'Mixed VCF record is ambiguous'
-            f' when appling to sequence, consider remove them before applying.'
+            'Mixed VCF record is not supported,'
+            f' consider remove them before applying.\n'
             f'{varianceData}'
         )
         allFeatures_startSorted = sorted(
@@ -141,7 +151,7 @@ def applyVarianceDataOnSeqRecord(
         allFeatures_endSorted = sorted(
             newSeqRecord.features, key=lambda f: f.location.end
         )
-        start = varianceData['POS'] - 1 + accumulatedLenDiff
+        start = varianceData['POS'] - 1 + (len(newSeqRecord) - len(seqRecord))
         assert newSeqRecord[start].lower() == varianceData['REF'][0].lower()
         length = len(varianceData['REF'])
         upStreamSeq = newSeqRecord[:start]
@@ -158,7 +168,7 @@ def applyVarianceDataOnSeqRecord(
             upStreamFeatures = set(
                 allFeatures_startSorted[:-nFeaturesDownStream])
         downStreamFeatures = set(allFeatures_endSorted[nFeaturesUpStream:])
-        affectedFeatures: list[SeqFeature] = list(
+        affectedFeatures = list(
             upStreamFeatures.intersection(downStreamFeatures))
 
         # add affected features back
@@ -215,7 +225,7 @@ def applyVarianceDataOnSeqRecord(
     newSeqRecord.features = sorted(
         sorted(
             newSeqRecord.features,
-            key=lambda feat: feat.type, reverse=True # gene ahead of CDS
+            key=lambda feat: feat.type, reverse=True  # gene ahead of CDS
         ),
         key=lambda feat: feat.location.start
     )
@@ -226,6 +236,9 @@ def applyVariancesOnSeqRecords(
     varianceDatas: list[VarianceData],
     seqRecords: Iterable[SeqRecord]
 ) -> dict[str, SeqRecord]:
+    '''
+    Prokaryotes only: Intron and exon are not considered in this function.
+    '''
     variantSeqRecordDict: dict[str, SeqRecord] = {}
     totalN = 0
     for seqRec in seqRecords:
