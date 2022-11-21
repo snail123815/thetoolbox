@@ -11,7 +11,7 @@ from tqdm import tqdm
 from multiprocessing import Pool
 import shutil
 
-rootPath = (Path.home() / 'gdata/duc/MBT-collection').resolve()
+rootPath = (Path.home() / 'gdata/MBT-collection').resolve()
 
 targetDirs = [
     rootPath / 'MBT-initial-96strains',
