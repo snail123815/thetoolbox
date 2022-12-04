@@ -7,18 +7,34 @@ from os.path import commonpath
 IMPLEMENTED_COMPRESSION_FORMATS: list[str] = ['.gz', '.xz']
 
 
-def getSuffixIfCompressed(filePath: Path) -> str:
-    if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
-        return filePath.with_suffix('').suffix
+def splitStemSuffixIfCompressed(
+    filePath: Path,
+    allowedFormats: list[str] = IMPLEMENTED_COMPRESSION_FORMATS,
+    fullSuffix: bool = False
+) -> tuple[str, str]:
+    if filePath.suffix in allowedFormats:
+        stem = filePath.with_suffix('').stem
+        suffix = filePath.with_suffix('').suffix
+        if fullSuffix:
+            suffix = filePath.suffix + suffix
+        return stem, suffix
     else:
-        return filePath.suffix
+        return filePath.stem, filePath.suffix
 
 
-def getStemIfCompressed(filePath: Path) -> str:
-    if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
-        return filePath.with_suffix('').stem
-    else:
-        return filePath.stem
+def getSuffixIfCompressed(
+    filePath: Path,
+    allowedFormats: list[str] = IMPLEMENTED_COMPRESSION_FORMATS,
+    fullSuffix: bool = False
+) -> str:
+    return splitStemSuffixIfCompressed(filePath, allowedFormats, fullSuffix)[1]
+
+
+def getStemIfCompressed(
+    filePath: Path,
+    allowedFormats: list[str] = IMPLEMENTED_COMPRESSION_FORMATS
+) -> str:
+    return splitStemSuffixIfCompressed(filePath, allowedFormats)[0]
 
 
 def decompressFile(filePath: Path) -> Path:
@@ -46,8 +62,11 @@ def decompressFile(filePath: Path) -> Path:
     return resultFilePath
 
 
-def decompFileIfCompressed(filePath: Path) -> tuple[Path, bool]:
-    if filePath.suffix in IMPLEMENTED_COMPRESSION_FORMATS:
+def decompFileIfCompressed(
+    filePath: Path,
+    allowedFormats: list[str] = IMPLEMENTED_COMPRESSION_FORMATS
+) -> tuple[Path, bool]:
+    if filePath.suffix in allowedFormats:
         return decompressFile(filePath), True
     else:
         return filePath, False

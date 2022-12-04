@@ -10,6 +10,7 @@ import time
 import argparse
 import logging
 from pathlib import Path
+from pyBioinfo_modules.basic.decompress import splitStemSuffixIfCompressed
 
 env = '~/genvs/shortReads/'
 
@@ -89,7 +90,7 @@ def main():
 
     # peSfx defined here if not defined
     if isPe:
-        peSfx = imputePesuffix(files, rawExt, peSfx)
+        peSfx = imputePeSuffix(files, rawExt, peSfx)
 
     # samples defined here if not defined
     if isinstance(samples, type(None)):
@@ -211,18 +212,34 @@ def buildBowtie2idx(fs: list[Path], out: Path, name=None):
     return os.path.join(out, bt2_base)
 
 
-def imputePesuffix(rawFiles, rawExt, peSfx=None):
-    if not isinstance(peSfx, type(None)):
+def imputePeSuffix(
+    rawFiles: list[Path],
+    peSfx: list[str] = []
+):
+    if len(peSfx) == 0:
         return peSfx
-    assert len(rawFiles) % 2 == 0
-    assert len(rawFiles) > 0
-    fns = sorted([f[:-len(rawExt)] for f in rawFiles])
+    assert len(rawFiles) % 2 == 0 and len(rawFiles) != 0, (
+        'Pair end reads should be in pairs, however'
+        f' only {len(rawFiles)} found.')
+    extensions = []
+    fileNames = []
+    for f in rawFiles:
+        fn, suffix = splitStemSuffixIfCompressed(f, ['.gz'], fullSuffix=True)
+        fileNames.append(fn)
+        extensions.append(suffix)
+    extensions = sorted(list(set(extensions)))
+    assert len(extensions) == 1, f'Multiple file formats found {extensions}'
+    peFound = False
     for i in range(1, 12):
-        s = set(fn[-i:] for fn in fns)
+        s: set[str] = set(fn[-i:] for fn in fileNames)
         if len(s) == 2:
             peSfx = sorted(s)
-            logging.info(f'Found pairend suffix {peSfx}')
-            return peSfx
+            peFound = True
+        if len(s) != 2 and peFound:
+            break
+    if peFound:
+        logging.info(f'Found pairend suffix {peSfx}')
+        return peSfx
     raise ValueError(f'pair end suffix not found in {rawFiles}')
 
 
