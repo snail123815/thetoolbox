@@ -2,7 +2,7 @@
 # put aligned file per sample.
 
 
-from subprocess import run
+import subprocess
 from tempfile import NamedTemporaryFile
 from Bio import SeqIO
 import os
@@ -11,8 +11,9 @@ import argparse
 import logging
 from pathlib import Path
 from pyBioinfo_modules.basic.decompress import splitStemSuffixIfCompressed
-
-env = '~/genvs/shortReads/'
+from pyBioinfo_modules.wrappers._environment_settings \
+    import SHORTREADS_ENV, SHELL, withActivateEnvCmd
+from typing import IO
 
 
 def main():
@@ -34,7 +35,6 @@ def main():
         required=True,
         type=Path,
         help='path to genome file(s), also supports indexed genome (*.bt2)')
-
     parser.add_argument(
         '--isPe',
         action='store_true',
@@ -45,7 +45,9 @@ def main():
     parser.add_argument(
         '--pesuffix',
         nargs=2,
-        help='suffix to pairend file name. eg. a_1_.fq.gz and a_2_.fq.gz, then set this to --pesuffix _1_ _2_')
+        help=('suffix to pairend file name. Will impute by default.'
+              ' eg. a_1_.fq.gz and a_2_.fq.gz, --pesuffix _1_ _2_'))
+
     parser.add_argument(
         '--ncpu',
         default=1,
@@ -54,7 +56,9 @@ def main():
     parser.add_argument(
         '--sampleNames',
         nargs="+",
-        help='sample names if file names contain random generated string which will unpair the samples after removing pairend suffix')
+        help=('List of sample names.'
+              ' Set when sample names are random string'
+              ' which will unpair the samples after removing pairend suffix'))
 
     args = parser.parse_args()
 
@@ -75,73 +79,110 @@ def main():
         [args.genome], out=args.out / 'genomeIdx')
 
     # Gether files for each sample, max depth 2
-    files = [f for f in args.raw.iterdir() if f.is_file()]
-    [files.extend(f for f in d.iterdir() if f.is_file())
+    filePaths = [f for f in args.raw.iterdir() if f.is_file()]
+    [filePaths.extend(f for f in d.iterdir() if f.is_file())
      for d in args.raw.iterdir() if d.is_dir()]
-    for f in files.copy():
-        if f.suffix == '.gz':
-            ext = f.with_suffix('').suffix
+    for f in filePaths.copy():
+        ext = splitStemSuffixIfCompressed(f)[1]
+        if ext.split('.')[0] not in ['fastq', 'fq']:
+            filePaths.pop(f)
+    assert len(filePaths) > 0, f'Files not found in {args.raw}'
+    FILE_PATHS = sorted(filePaths)
+    FILE_PARTS = [splitStemSuffixIfCompressed(f, fullSuffix=True) for
+                  f in FILE_PATHS]
+    FILE_NAMES = [fp[0] for fp in FILE_PARTS]
+    FILE_FULLEXTS = [fp[1] for fp in FILE_PARTS]
+    assert len(set(FILE_FULLEXTS)) == 1, (
+        'All files should have same format, '
+        f'yet multiple found {set(FILE_FULLEXTS)}.')
+    assert len(set(FILE_NAMES)) == len(FILE_NAMES), (
+        'File names has duplicates'
+        ', maybe from different dirs?\n'
+        f'{set([fn for fn in FILE_NAMES if FILE_NAMES.count(fn) > 1])}')
+
+    if args.sampleNames is not None:
+        samples = args.sampleNames
+    else:
+        samples = []
+
+    sampleFileDict: dict[str, list[Path]] = {}
+
+    peSfx: list[str] = []
+    if args.isPe:
+        peSfx = imputePeSuffix(FILE_PATHS)
+        # TODO make it only accecpt file stems
+        if samples == []:
+            samples = (sorted(list(set(f[:-len(peSfx[0])] for f in FILE_NAMES)))
+                       if len(samples) == 0 else samples)
+            assert (len(FILE_PATHS) / len(samples)) % 2 == 0
+        for s in samples:
+            fns = [FILE_PATHS[i] for i, fn in enumerate(FILE_NAMES) if s in fn]
+            assert len(fns) > 0, f'Did not find files for sample {s}'
+            assert len(fns) % 2 == 0, (
+                f'Number of files for sample {s} is not paired.\n'
+                f'{fns}'
+            )
+            sampleFileDict[s] = fns
+
+    else:  # single end reads
+        if samples == []:
+            for fn, fp in zip(FILE_NAMES, FILE_PATHS):
+                sampleFileDict[fn] = [fp]
+            samples = FILE_NAMES
+        elif len(samples) == 1:
+            sampleFileDict[samples[0]] = FILE_PATHS
         else:
-            ext = f.suffix
-        if ext not in ['.fastq', '.fq']:
-            files.pop(f)
-    assert len(files) > 0, f'Files not found in {args.raw}'
-    files.sort()
+            for s in samples:
+                fps = [FILE_PATHS[i] for i, fn in enumerate(FILE_NAMES)
+                       if s in fn]
+                assert len(fps) > 0, f'Did not find files for sample {s}'
+                sampleFileDict[s] = fps
 
-    # peSfx defined here if not defined
-    if isPe:
-        peSfx = imputePeSuffix(files, rawExt, peSfx)
-
-    # samples defined here if not defined
-    if isinstance(samples, type(None)):
-        fns = [os.path.split(f)[1][:-len(rawExt)] for f in files]
-        if isPe:
-            samples = list(set(f[:-len(peSfx[0])] for f in fns))
-        else:
-            samples = fns
-        samples.sort()
-
-    sampleFileDict = {}
-    for s in samples:
-        fs = sorted([f for f in files if s in f])
-        if isPe:
-            sampleFileDict[s] = {peSfx[0]: [f for f in fs if f[:-len(rawExt)].endswith(peSfx[0])],
-                                 peSfx[1]: [f for f in fs if f[:-len(rawExt)].endswith(peSfx[1])]}
-        else:
-            sampleFileDict[s] = fs
-
-    totalTs = time.time()
-    assert len(samples) > 0
+    tInit = time.time()
     logging.info(f'Samples to process: {samples}')
-    for i, s in enumerate(samples):
+    for i, (s, fps) in enumerate(sampleFileDict.items()):
         ts = time.time()
         logging.info(f'Processing {i+1}/{len(samples)}: {s}')
 
         # prepare align arguments
-        args = ['bowtie2', '-x', genomeBowtie2Idx, '-p', ncpu]
-        if isPe:
-            args.extend([
-                '-1', ','.join(sampleFileDict[s][peSfx[0]]),
-                '-2', ','.join(sampleFileDict[s][peSfx[1]])
+        cmdList = ['bowtie2', '-x', genomeBowtie2Idx, '-p', args.ncpu]
+        if args.isPe:
+            assert len(peSfx) == 2
+            samples1: list[str] = []
+            samples2: list[str] = []
+            for fp in fps:
+                assert not (peSfx[0] in fp.stem and peSfx[1] in fp.stem)
+                if peSfx[0] in fp.stem:
+                    samples1.append(str(fp))
+                elif peSfx[1] in fp.stem:
+                    samples2.append(str(fp))
+                else:
+                    raise ValueError(f'File {fp} not bound to PE {peSfx}')
+            cmdList.extend([
+                '-1', ','.join(samples1),
+                '-2', ','.join(samples2)
             ])
         else:
-            args.extend([
-                '-U', ','.join(sampleFileDict[s])
+            cmdList.extend([
+                '-U', ','.join([str(fp) for fp in fps])
             ])
 
         # prepare convert to bam arguments
-        target = os.path.join(outFolder, f'{s.strip("_")}.bam')
+        target = args.out / f'{s.strip("_")}.bam'
 
-        if os.path.isfile(target):
+        if target.is_file():
+            logging.info(f'Found existing bam file, skip')
             pass
-        args.extend([
+        cmdList.extend([
             '|', 'samtools', 'view', '-bS', '-@', toBamNcpu,
             "|", "samtools", "sort", '-@', toBamNcpu, "--write-index", '-o', target
         ])
-        logging.info(' '.join(args))
+        logging.info(' '.join(cmdList))
 
         # Start running both
-        result = run(args=' '.join(args), shell=True, capture_output=True)
+        cmd = withActivateEnvCmd(' '.join(cmdList), SHORTREADS_ENV)
+        result = subprocess.run(cmd, shell=True,
+                                capture_output=True, executable=SHELL)
         if result.returncode != 0:
             logging.info('stderr: ' + result.stderr.decode())
             logging.info('stdout: ' + result.stdout.decode())
@@ -149,11 +190,11 @@ def main():
         logging.info(result.stderr.decode())
         logging.info(f'Finished in {diffTime(ts)}\n')
 
-    logging.info(f'All done, time elapsed {diffTime(totalTs)}')
+    logging.info(f'All done, time elapsed {diffTime(tInit)}')
     logging.info('=' * 20 + getTime() + '=' * 20 + '\n' * 2)
 
 
-def buildBowtie2idx(fs: list[Path], out: Path, name=None):
+def buildBowtie2idx(fs: list[Path], out: Path, name=None) -> Path:
     fs = [f.resolve() for f in fs]
     out = out.resolve()
 
@@ -175,32 +216,32 @@ def buildBowtie2idx(fs: list[Path], out: Path, name=None):
         return outIdxForUse
 
     # convert gbk to fa
-    converted = []
+    tempFiles: list[IO] = []
     if os.path.splitext(fs[0])[1] not in ['.fa', '.fasta', '.fna', '.fsa']:
         # try gbk
-        newFs = []
+        newFps: list[Path] = []
         try:
             for f in fs:
                 for s in SeqIO.parse(f, 'genbank'):
                     newF = NamedTemporaryFile()
                     SeqIO.write(s, newF.name, 'fasta')
-                    newFs.append(newF.name)
-                    converted.append(newF)  # for closing these files later
-        except BaseException as err:
-            # python >= 3.8
+                    newFps.append(Path(newF.name))
+                    tempFiles.append(newF)  # for closing these files later
+        except Exception as err:
             logging.error(f'Unexpected error {err=}, {type(err)=}')
-        fs = newFs
+            raise
+        fs = newFps
 
     logging.info('-' * 20 + 'Indexing genome ' + getTime() + '-' * 20)
     args = [
         'bowtie2-build',
-        ','.join(fs),
+        ','.join(str(f) for f in fs),
         os.path.join(out, bt2_base),
     ]
     logging.info(' '.join(args))
-    result = run(args=args, capture_output=True)
-    for f in converted:
-        f.close()
+    cmd = withActivateEnvCmd(' '.join(args), SHORTREADS_ENV)
+    result = subprocess.run(args=args, capture_output=True, executable=SHELL)
+    (f.close() for f in tempFiles)
     if result.returncode != 0:
         logging.info('stderr: ' + result.stderr.decode())
         logging.info('stdout: ' + result.stdout.decode())
@@ -209,7 +250,7 @@ def buildBowtie2idx(fs: list[Path], out: Path, name=None):
     logging.info('-' * 20 + 'DONE Indexing genome' + getTime() + '-' * 20)
     logging.info('\n' * 2)
 
-    return os.path.join(out, bt2_base)
+    return outIdxForUse
 
 
 def imputePeSuffix(
