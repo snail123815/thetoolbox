@@ -2,18 +2,13 @@
 # put aligned file per sample.
 
 
-import subprocess
-from tempfile import NamedTemporaryFile
-from Bio import SeqIO
-import os
 import time
 import argparse
 import logging
 from pathlib import Path
 from pyBioinfo_modules.basic.decompress import splitStemSuffixIfCompressed
-from pyBioinfo_modules.wrappers._environment_settings \
-    import SHORTREADS_ENV, SHELL, withActivateEnvCmd
-from typing import IO
+from pyBioinfo_modules.basic.basic import getTimeStr, timeDiffStr
+from pyBioinfo_modules.wrappers.bowtie2 import buildBowtie2idx, runBowtie2
 
 
 def main():
@@ -60,8 +55,6 @@ def main():
 
     args = parser.parse_args()
 
-    toBamNcpu = max(args.ncpu // 8, 1)
-
     # Gether all files, max depth 2
     filePaths: list[Path] = []
     for d in args.raw:
@@ -91,11 +84,10 @@ def main():
     if not args.out.is_dir():
         args.out.mkdir(exist_ok=True)
     logging.basicConfig(
-        filename=os.path.join(
-            args.out / 'align.log'),
+        filename=args.out / 'align.log',
         level=logging.DEBUG)
     logging.debug(args)
-    logging.info('=' * 20 + getTime() + '=' * 20)
+    logging.info('=' * 20 + getTimeStr() + '=' * 20)
 
     if args.sampleNames is not None:
         samples = args.sampleNames
@@ -107,7 +99,6 @@ def main():
     peSfx: list[str] = []
     if args.isPe:
         peSfx = imputePeSuffix(FILE_NAMES)
-        # TODO make it only accecpt file stems
         if samples == []:
             samples = (sorted(list(set(f[:-len(peSfx[0])] for f in FILE_NAMES)))
                        if len(samples) == 0 else samples)
@@ -142,125 +133,39 @@ def main():
 
     logging.info(f'Samples to process: {samples}')
     for i, (s, fps) in enumerate(sampleFileDict.items()):
-        ts = time.time()
         logging.info(f'Processing {i+1}/{len(samples)}: {s}')
 
         # prepare align arguments
-        cmdList = ['bowtie2', '-x', str(genomeBowtie2Idx), '-p', str(args.ncpu)]
         if args.isPe:
             assert len(peSfx) == 2
-            samples1: list[str] = []
-            samples2: list[str] = []
+            samples1: list[Path] = []
+            samples2: list[Path] = []
             for fp in fps:
                 assert not (peSfx[0] in fp.stem and peSfx[1] in fp.stem)
                 if peSfx[0] in fp.stem:
-                    samples1.append(str(fp))
+                    samples1.append(fp)
                 elif peSfx[1] in fp.stem:
-                    samples2.append(str(fp))
+                    samples2.append(fp)
                 else:
                     raise ValueError(f'File {fp} not bound to PE {peSfx}')
-            cmdList.extend([
-                '-1', ','.join(samples1),
-                '-2', ','.join(samples2)
-            ])
+            runBowtie2(
+                genomeBowtie2Idx,
+                outPut=args.out,
+                peFiles1=samples1, peFiles2=samples2,
+                sample=s,
+                ncpu=args.ncpu
+            )
         else:
-            cmdList.extend([
-                '-U', ','.join([str(fp) for fp in fps])
-            ])
+            runBowtie2(
+                genomeBowtie2Idx,
+                outPut=args.out,
+                unpairedFiles=fps,
+                sample=s,
+                ncpu=args.ncpu
+            )
 
-        # prepare convert to bam arguments
-        target = args.out / f'{s.strip("_")}.bam'
-        targetFinishedFlag = args.out / f'{s.strip("_")}.done'
-
-        if targetFinishedFlag.is_file():
-            if target.is_file():
-                logging.info(f'Found finished bam file {str(target)}')
-            else:
-                logging.info(f'Found finished flag but not bam file.')
-                raise FileNotFoundError(str(target))
-        else:
-            cmdList.extend([
-                '|', 'samtools', 'view', '-bS', '-@', str(toBamNcpu),
-                "|", "samtools", "sort", '-@', str(
-                    toBamNcpu), "--write-index", '-o', str(target)
-            ])
-            logging.info(' '.join(cmdList))
-
-            # Start running both
-            cmd = withActivateEnvCmd(' '.join(cmdList), SHORTREADS_ENV)
-            result = subprocess.run(cmd, shell=True,
-                                    capture_output=True, executable=SHELL)
-            if result.returncode != 0:
-                logging.info('stderr: ' + result.stderr.decode())
-                logging.info('stdout: ' + result.stdout.decode())
-            # stderr has logging.info info from bowtie2
-            logging.info(result.stderr.decode())
-            logging.info(f'Finished in {diffTime(ts)}\n')
-            targetFinishedFlag.touch()
-
-    logging.info(f'All done, time elapsed {diffTime(tInit)}')
-    logging.info('=' * 20 + getTime() + '=' * 20 + '\n' * 2)
-
-
-def buildBowtie2idx(fs: list[Path], out: Path, name=None) -> Path:
-    fs = [f.resolve() for f in fs]
-    out = out.resolve()
-
-    # check if idx file exists
-    genomePath = fs[0].parent
-    genomeName = fs[0].stem
-    logging.info(f'genome name: {genomeName}')
-
-    out.mkdir(exist_ok=True)
-    bt2_base = ('_'.join(f.stem for f in fs) if name is None else name)
-    outIdxForUse = out / bt2_base
-
-    if any((Path(str(outIdxForUse) + '.1.bt2').is_file(),
-            Path(str(outIdxForUse) + '.1.bt21').is_file())):
-        logging.info(
-            'Found index file, will not make new ones.\n'
-            f'{str(list(out.glob(bt2_base + "*"))[0])}')
-        return outIdxForUse
-
-    # convert gbk to fa
-    tempFiles: list[IO] = []
-    if os.path.splitext(fs[0])[1] not in ['.fa', '.fasta', '.fna', '.fsa']:
-        # try gbk
-        newF = NamedTemporaryFile()
-        newFps: list[Path] = []
-        try:
-            for f in fs:
-                for s in SeqIO.parse(f, 'genbank'):
-                    SeqIO.write(s, newF.name, 'fasta')
-                    newFps.append(Path(newF.name))
-                    tempFiles.append(newF)  # for closing these files later
-        except Exception as err:
-            logging.error(f'Unexpected error {err=}, {type(err)=}')
-            raise
-        fs = newFps
-
-    logging.info('-' * 20 + 'Indexing genome ' + getTime() + '-' * 20)
-    args = [
-        'bowtie2-build',
-        ','.join(str(f) for f in fs),
-        os.path.join(out, bt2_base),
-    ]
-    logging.info(' '.join(args))
-    cmd = withActivateEnvCmd(' '.join(args), SHORTREADS_ENV)
-    result = subprocess.run(cmd, capture_output=True,
-                            shell=True, executable=SHELL)
-    (f.close() for f in tempFiles)
-    if result.returncode != 0 or not any(
-        (Path(str(outIdxForUse) + '.1.bt2').is_file(),
-         Path(str(outIdxForUse) + '.1.bt21').is_file())):
-        logging.info('stderr: ' + result.stderr.decode())
-        logging.info('stdout: ' + result.stdout.decode())
-        logging.info('-' * 20 + 'Error Indexing genome' + getTime() + '-' * 20)
-        raise Exception
-    logging.info('-' * 20 + 'DONE Indexing genome' + getTime() + '-' * 20)
-    logging.info('\n' * 2)
-
-    return outIdxForUse
+    logging.info(f'All done, time elapsed {timeDiffStr(tInit)}')
+    logging.info('=' * 20 + getTimeStr() + '=' * 20 + '\n' * 2)
 
 
 def imputePeSuffix(
@@ -284,16 +189,6 @@ def imputePeSuffix(
         logging.info(f'Found pairend suffix {peSfx}')
         return peSfx
     raise ValueError(f'pair end suffix not found in {rawFileNames}')
-
-
-def getTime():
-    return time.strftime('%z, %a, %d %b %Y, %H:%M:%S', time.localtime())
-
-
-def diffTime(a):
-    d = abs(time.time() - a)
-    h = int(d // 3600)
-    return str(h).zfill(2) + time.strftime(':%M:%S', time.gmtime(d))
 
 
 if __name__ == "__main__":
