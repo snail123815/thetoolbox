@@ -8,6 +8,7 @@ from Bio import SeqIO
 from Bio.SeqRecord import SeqRecord
 from Bio.SeqFeature import SeqFeature
 from BCBio import GFF
+from pathlib import Path
 from pyBioinfo_modules.wrappers._environment_settings \
     import SHORTREADS_ENV, SHELL, withActivateEnvCmd
 
@@ -16,20 +17,33 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument(
         '--input',
+        type=Path,
         required=True,
         help='alignment folder (bam or sam files)')
     parser.add_argument(
         '--output',
+        type=Path,
         required=True,
         help='gene counts outpuf folder')
     parser.add_argument(
         '--gbk',
+        type=Path,
         required=True,
         help='genbank file with annotation')
-    parser.add_argument('--ncpu', help='number of cpu to use')
-    parser.add_argument('--isPe', action='store_true', help='set if pairend')
-    parser.add_argument('-t', default='gene', help='target feature')
-    parser.add_argument('-g', default='locus_tag', help='group factor')
+    parser.add_argument('--ncpu', type=int, default=1,
+                        help='number of cpu to use')
+    parser.add_argument('--isPe', action='store_true',
+                        help='set if pairend')
+    parser.add_argument(
+        '-t', '--targetFeature',
+        type=str,
+        default='gene',
+        help='target feature')
+    parser.add_argument(
+        '-g', '--groupFactor',
+        type=str,
+        default='locus_tag',
+        help='group factor')
     parser.add_argument(
         '--fractionCounting',
         action='store_true',
@@ -37,26 +51,19 @@ def main():
     parser.add_argument(
         '--peLoose',
         action='store_true',
-        help='will use loose configuration in pairend counting, set it if you donot want the features: -P, Check validity of paired-end distance when counting read pairs. Use -d and -D to set thresholds; -B, only count read pairs that have both ends aligned. (must set togeter with -P) ')
+        help=('Will use loose configuration in pairend counting, '
+              'set it if you donot want the features: -P, Check validity of '
+              'paired-end distance when counting read pairs. '
+              'Use -d and -D to set thresholds; -B, only count read pairs that '
+              'have both ends aligned. (must set togeter with -P) ')
+    )
 
     args = parser.parse_args()
-    alignFolder = args.input
-    out = args.output
-    gbk = args.gbk
 
-    ncpu = args.ncpu
-    isPe = args.isPe
-
-    targetFeature = args.t
-    groupFactor = args.g
-
-    fractionCounting = args.fractionCounting
-    peStrict = not args.peLoose
-
-    os.makedirs(out, exist_ok=True)
+    args.output.mkdir(exist_ok=True)
     logging.basicConfig(
         filename=os.path.join(
-            out,
+            args.output,
             '!featureCounts.log'),
         level=logging.DEBUG)
 
@@ -64,20 +71,20 @@ def main():
     gffFile = NamedTemporaryFile('w+')
     # keep only selected features
     seqs = []
-    for seq in SeqIO.parse(gbk, 'genbank'):
+    for seq in SeqIO.parse(args.gbk, 'genbank'):
         newSeq = SeqRecord('', id=seq.id)
         for feat in seq.features:
-            if feat.type in targetFeature.split(
-                    ',') and groupFactor in feat.qualifiers:
+            if feat.type in args.targetFeature.split(
+                    ',') and args.groupFactor in feat.qualifiers:
                 newFeat = SeqFeature(
                     location=feat.location,
                     type=feat.type,
                     id=feat.id,
                 )
-                newFeat.qualifiers[groupFactor] = feat.qualifiers[groupFactor]
+                newFeat.qualifiers[args.groupFactor] = feat.qualifiers[args.groupFactor]
                 newSeq.features.append(newFeat)
         if len(newSeq.features) == 0:
-            errmsg = f'Did not find any feature with type {targetFeature} and have qualifier {groupFactor}.'
+            errmsg = f'Did not find any feature with type {args.targetFeature} and have qualifier {args.groupFactor}.'
             logging.error(errmsg)
             raise ValueError(errmsg)
         seqs.append(newSeq)
@@ -85,18 +92,20 @@ def main():
     GFF.write(seqs, gffFile)
     gffFile.seek(0)
     gff = gffFile.name
-    logging.info('Head of gff file')
-    for i in range(12):
-        logging.info(gffFile.readline())
+    logging.info('####### Head of gff file #######')
+    for i, l in enumerate(gffFile.readlines()):
+        if i > 10:
+            break
+        logging.info(l.strip())
     logging.info('####### End head of gff ########')
 
     finalTs = time.time()
-    if not os.path.isdir(out):
-        os.makedirs(out)
     logging.info('=' * 20 + getTime() + '=' * 20)
-    files = [f for f in os.listdir(alignFolder) if f.endswith('.bam')]
+    files = [f for f in args.input.iterdir() if
+             f.is_file() and f.suffix == '.bam']
     if len(files) == 0:
-        files = [f for f in os.listdir(alignFolder) if f.endswith('.sam')]
+        files = [f for f in args.input.iterdir() if
+                f.is_file() and f.suffix == '.sam']
     assert len(files) != 0
 
     for i, f in enumerate(files):
@@ -105,11 +114,11 @@ def main():
         b = os.path.splitext(os.path.split(f)[-1])[0]
         cmdList = [
             'featureCounts',
-            '-T', ncpu,
+            '-T', str(args.ncpu),
             '-a', gff,
             '-F', 'GTF',
-            '-t', targetFeature,
-            '-g', groupFactor,
+            '-t', args.targetFeature,
+            '-g', args.groupFactor,
             '--minOverlap', '20',  # Minimum number of overlapping bases in a read that is
             # required for read assignment. 1 by default. Number of
             # overlapping bases is counted from both reads if paired
@@ -122,10 +131,10 @@ def main():
             # counted from both reads if paired end. Both this option
             # and '--minOverlap' option need to be satisfied for read
             # assignment.
-            '-o', os.path.join(out, f'{b}.txt'),
-            f'{alignFolder}/{f}'
+            '-o', str(args.output/ f'{b}.txt'),
+            str(f)
         ]
-        if fractionCounting:
+        if args.fractionCounting:
             # Multi-mapping reads will also be counted. For a multi-
             cmdList.insert(3, '-M')
             # mapping read, all its reported alignments will be
@@ -147,13 +156,13 @@ def main():
             cmdList.insert(5, '-O')
             # features if -f is specified).
 
-        if isPe:
+        if args.isPe:
             # If specified, fragments (or templates) will be counted
             cmdList.insert(3, '-p')
             # instead of reads. This option is only applicable for
             # paired-end reads; single-end reads are always counted as
             # reads.
-            if peStrict:
+            if not args.peLoose:
                 # Check validity of paired-end distance when counting read
                 cmdList.insert(4, '-P')
                 # pairs. Use -d and -D to set thresholds.
