@@ -40,8 +40,6 @@ def main():
         action='store_true',
         help='set if you have pairend')
 
-    # TODO this should be removed
-    parser.add_argument('--rawExt', help='extension ".fastq.gz" or ".fq.gz"')
     parser.add_argument(
         '--pesuffix',
         nargs=2,
@@ -62,30 +60,20 @@ def main():
 
     args = parser.parse_args()
 
-    # TODO check existance of files before creating output dir
-    if not args.out.is_dir():
-        args.out.mkdir(exist_ok=True)
-
     toBamNcpu = max(args.ncpu // 8, 1)
 
-    logging.basicConfig(
-        filename=os.path.join(
-            args.out / 'align.log'),
-        level=logging.DEBUG)
-    logging.debug(args)
-    logging.info('=' * 20 + getTime() + '=' * 20)
-
-    genomeBowtie2Idx = buildBowtie2idx(
-        [args.genome], out=args.out / 'genomeIdx')
-
-    # Gether files for each sample, max depth 2
-    filePaths = [f for f in args.raw.iterdir() if f.is_file()]
-    [filePaths.extend(f for f in d.iterdir() if f.is_file())
-     for d in args.raw.iterdir() if d.is_dir()]
+    # Gether all files, max depth 2
+    filePaths: list[Path] = []
+    for d in args.raw:
+        for n in d.iterdir():
+            if n.is_file():
+                filePaths.append(n)
+            elif n.is_dir():
+                filePaths.extend(f for f in n.iterdir() if f.is_file())
     for f in filePaths.copy():
         ext = splitStemSuffixIfCompressed(f)[1]
-        if ext.split('.')[0] not in ['fastq', 'fq']:
-            filePaths.pop(f)
+        if ext.split('.')[1] not in ['fastq', 'fq']:
+            filePaths.remove(f)
     assert len(filePaths) > 0, f'Files not found in {args.raw}'
     FILE_PATHS = sorted(filePaths)
     FILE_PARTS = [splitStemSuffixIfCompressed(f, fullSuffix=True) for
@@ -100,6 +88,15 @@ def main():
         ', maybe from different dirs?\n'
         f'{set([fn for fn in FILE_NAMES if FILE_NAMES.count(fn) > 1])}')
 
+    if not args.out.is_dir():
+        args.out.mkdir(exist_ok=True)
+    logging.basicConfig(
+        filename=os.path.join(
+            args.out / 'align.log'),
+        level=logging.DEBUG)
+    logging.debug(args)
+    logging.info('=' * 20 + getTime() + '=' * 20)
+
     if args.sampleNames is not None:
         samples = args.sampleNames
     else:
@@ -109,7 +106,7 @@ def main():
 
     peSfx: list[str] = []
     if args.isPe:
-        peSfx = imputePeSuffix(FILE_PATHS)
+        peSfx = imputePeSuffix(FILE_NAMES)
         # TODO make it only accecpt file stems
         if samples == []:
             samples = (sorted(list(set(f[:-len(peSfx[0])] for f in FILE_NAMES)))
@@ -139,13 +136,17 @@ def main():
                 sampleFileDict[s] = fps
 
     tInit = time.time()
+
+    genomeBowtie2Idx = buildBowtie2idx(
+        args.genome, out=args.out / 'genomeIdx')
+
     logging.info(f'Samples to process: {samples}')
     for i, (s, fps) in enumerate(sampleFileDict.items()):
         ts = time.time()
         logging.info(f'Processing {i+1}/{len(samples)}: {s}')
 
         # prepare align arguments
-        cmdList = ['bowtie2', '-x', genomeBowtie2Idx, '-p', args.ncpu]
+        cmdList = ['bowtie2', '-x', str(genomeBowtie2Idx), '-p', str(args.ncpu)]
         if args.isPe:
             assert len(peSfx) == 2
             samples1: list[str] = []
@@ -169,26 +170,33 @@ def main():
 
         # prepare convert to bam arguments
         target = args.out / f'{s.strip("_")}.bam'
+        targetFinishedFlag = args.out / f'{s.strip("_")}.done'
 
-        if target.is_file():
-            logging.info(f'Found existing bam file, skip')
-            pass
-        cmdList.extend([
-            '|', 'samtools', 'view', '-bS', '-@', toBamNcpu,
-            "|", "samtools", "sort", '-@', toBamNcpu, "--write-index", '-o', target
-        ])
-        logging.info(' '.join(cmdList))
+        if targetFinishedFlag.is_file():
+            if target.is_file():
+                logging.info(f'Found finished bam file {str(target)}')
+            else:
+                logging.info(f'Found finished flag but not bam file.')
+                raise FileNotFoundError(str(target))
+        else:
+            cmdList.extend([
+                '|', 'samtools', 'view', '-bS', '-@', str(toBamNcpu),
+                "|", "samtools", "sort", '-@', str(
+                    toBamNcpu), "--write-index", '-o', str(target)
+            ])
+            logging.info(' '.join(cmdList))
 
-        # Start running both
-        cmd = withActivateEnvCmd(' '.join(cmdList), SHORTREADS_ENV)
-        result = subprocess.run(cmd, shell=True,
-                                capture_output=True, executable=SHELL)
-        if result.returncode != 0:
-            logging.info('stderr: ' + result.stderr.decode())
-            logging.info('stdout: ' + result.stdout.decode())
-        # stderr has logging.info info from bowtie2
-        logging.info(result.stderr.decode())
-        logging.info(f'Finished in {diffTime(ts)}\n')
+            # Start running both
+            cmd = withActivateEnvCmd(' '.join(cmdList), SHORTREADS_ENV)
+            result = subprocess.run(cmd, shell=True,
+                                    capture_output=True, executable=SHELL)
+            if result.returncode != 0:
+                logging.info('stderr: ' + result.stderr.decode())
+                logging.info('stdout: ' + result.stdout.decode())
+            # stderr has logging.info info from bowtie2
+            logging.info(result.stderr.decode())
+            logging.info(f'Finished in {diffTime(ts)}\n')
+            targetFinishedFlag.touch()
 
     logging.info(f'All done, time elapsed {diffTime(tInit)}')
     logging.info('=' * 20 + getTime() + '=' * 20 + '\n' * 2)
@@ -207,23 +215,22 @@ def buildBowtie2idx(fs: list[Path], out: Path, name=None) -> Path:
     bt2_base = ('_'.join(f.stem for f in fs) if name is None else name)
     outIdxForUse = out / bt2_base
 
-    if any((
-        outIdxForUse.with_suffix('.1.bt2').is_file(),
-        outIdxForUse.with_suffix('.1.bt21').is_file()
-    )):
+    if any((Path(str(outIdxForUse) + '.1.bt2').is_file(),
+            Path(str(outIdxForUse) + '.1.bt21').is_file())):
         logging.info(
-            f'Found index file {out.glob(bt2_base)}, will not make new ones.')
+            'Found index file, will not make new ones.\n'
+            f'{str(list(out.glob(bt2_base + "*"))[0])}')
         return outIdxForUse
 
     # convert gbk to fa
     tempFiles: list[IO] = []
     if os.path.splitext(fs[0])[1] not in ['.fa', '.fasta', '.fna', '.fsa']:
         # try gbk
+        newF = NamedTemporaryFile()
         newFps: list[Path] = []
         try:
             for f in fs:
                 for s in SeqIO.parse(f, 'genbank'):
-                    newF = NamedTemporaryFile()
                     SeqIO.write(s, newF.name, 'fasta')
                     newFps.append(Path(newF.name))
                     tempFiles.append(newF)  # for closing these files later
@@ -240,9 +247,12 @@ def buildBowtie2idx(fs: list[Path], out: Path, name=None) -> Path:
     ]
     logging.info(' '.join(args))
     cmd = withActivateEnvCmd(' '.join(args), SHORTREADS_ENV)
-    result = subprocess.run(args=args, capture_output=True, executable=SHELL)
+    result = subprocess.run(cmd, capture_output=True,
+                            shell=True, executable=SHELL)
     (f.close() for f in tempFiles)
-    if result.returncode != 0:
+    if result.returncode != 0 or not any(
+        (Path(str(outIdxForUse) + '.1.bt2').is_file(),
+         Path(str(outIdxForUse) + '.1.bt21').is_file())):
         logging.info('stderr: ' + result.stderr.decode())
         logging.info('stdout: ' + result.stdout.decode())
         logging.info('-' * 20 + 'Error Indexing genome' + getTime() + '-' * 20)
@@ -254,25 +264,17 @@ def buildBowtie2idx(fs: list[Path], out: Path, name=None) -> Path:
 
 
 def imputePeSuffix(
-    rawFiles: list[Path],
+    rawFileNames: list[str],
     peSfx: list[str] = []
 ):
-    if len(peSfx) == 0:
+    if len(peSfx) != 0:
         return peSfx
-    assert len(rawFiles) % 2 == 0 and len(rawFiles) != 0, (
+    assert len(rawFileNames) % 2 == 0 and len(rawFileNames) != 0, (
         'Pair end reads should be in pairs, however'
-        f' only {len(rawFiles)} found.')
-    extensions = []
-    fileNames = []
-    for f in rawFiles:
-        fn, suffix = splitStemSuffixIfCompressed(f, ['.gz'], fullSuffix=True)
-        fileNames.append(fn)
-        extensions.append(suffix)
-    extensions = sorted(list(set(extensions)))
-    assert len(extensions) == 1, f'Multiple file formats found {extensions}'
+        f' {len(rawFileNames)} found.')
     peFound = False
     for i in range(1, 12):
-        s: set[str] = set(fn[-i:] for fn in fileNames)
+        s: set[str] = set(fn[-i:] for fn in rawFileNames)
         if len(s) == 2:
             peSfx = sorted(s)
             peFound = True
@@ -281,7 +283,7 @@ def imputePeSuffix(
     if peFound:
         logging.info(f'Found pairend suffix {peSfx}')
         return peSfx
-    raise ValueError(f'pair end suffix not found in {rawFiles}')
+    raise ValueError(f'pair end suffix not found in {rawFileNames}')
 
 
 def getTime():
