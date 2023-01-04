@@ -1,4 +1,6 @@
 import subprocess
+import ijson
+import json
 import logging
 from pathlib import Path
 from pathlib import PurePath
@@ -159,6 +161,16 @@ class ClusterInfo(TypedDict):
     coreRelativeLocs: list[FeatureLocation]
     joinedProteinFastaFile: Path
     fastaId: str
+    # TODO
+    # Each AntiSMASH cluster is a "region", feature type == 'region', 
+    # parse region info in 'qualifiers'
+    #     "region_number" 
+    #     "product" (could be multiple)
+    # Each AntiSMASH cluster might have multiple protocluster,
+    # feature type == 'protocluster', 
+    # parse protocluster info in 'qualifiers'
+    #     "protocluster_number"
+    #     "product"
 
 
 def parseClusterGbk(
@@ -275,3 +287,70 @@ def parseClusterGbk(
         joinedProteinFastaFile=proteinFastaFile,
         fastaId=fastaId
     )
+
+
+def find_NRPS_TE_domain(jsonResultPath: Path) -> list[SeqRecord]:
+    teDomains: list[SeqRecord] = []
+    resultName = jsonResultPath.stem
+
+    def TE_follow_PCP(domainList: list[str]) -> bool:
+        if 'Thioesterase' in domainList:
+            locationTe = domainList.index('Thioesterase')
+            if locationTe == 0:
+                return False
+            if domainList[locationTe - 1] == 'PCP':
+                return True
+        return False
+
+    with open(jsonResultPath, 'rb') as jsonHandle:
+        asResultRecords = ijson.kvitems(jsonHandle, 'records.item')
+        recordFeatures = (v for k, v in asResultRecords if k == 'features')
+        recordIds = (v for k, v in asResultRecords if k == 'id')
+
+        for id, rec in zip(recordIds, recordFeatures):
+            regionNumber = -1
+            protoclusterNumber = -1
+            protoclusterProduct = ''
+            domainList: list[str] = []
+
+            for feat in rec:
+                if feat['type'] == 'region':
+                    regionNumber = int(feat['qualifiers']['region_number'][0])
+                elif feat['type'] == 'protocluster':
+                    protoclusterNumber = int(
+                        feat['qualifiers']['protocluster_number'][0])
+                    protoclusterProduct = feat['qualifiers']['product'][0]
+                if protoclusterNumber == -1 or not protoclusterProduct == 'NRPS':
+                    continue
+
+                if feat['type'] == 'aSDomain':
+                    domain = feat['qualifiers']['aSDomain'][0]
+                    domainList.append(domain)
+                    if domain == "Thioesterase":
+                        teSeqRec = SeqRecord(
+                            Seq(feat['qualifiers']['translation'][0]),
+                            id='_'.join(
+                                feat['qualifiers']['domain_id'][0].split('_')[1:]),
+                            name=feat['qualifiers']['locus_tag'][0],
+                            description=(
+                                f'    {resultName}_seq_{id}'
+                                f'_region{regionNumber:0>3}'
+                                f'_protocluster{protoclusterNumber:0>3}'
+                            )
+                        )
+
+                # See if next CDS started
+                if feat['type'] == 'CDS':
+                    if TE_follow_PCP(domainList):
+                        assert "teSeqRec" in locals()
+                        print(
+                            'Found valid TE domain:\n'
+                            f'    {resultName}_seq_{id}'
+                            f'_region{regionNumber:0>3}'
+                            f'_protocluster{protoclusterNumber:0>3}'
+                        )
+                        teDomains.append(teSeqRec)
+                    domainList = []
+
+    jsonHandle.close()
+    return teDomains
