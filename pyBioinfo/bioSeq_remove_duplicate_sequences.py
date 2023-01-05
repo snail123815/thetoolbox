@@ -21,10 +21,10 @@ for rec in SeqIO.parse(args.f, 'fasta'):
     for i,t in enumerate(uniqSeqRecs):
         if t.seq == rec.seq:
             isUnique = False
-            nNonUniq += 1
             if t.id.startswith(seqGroupPrefix):
                 seqGroups[t.id][1].append(rec.description)
             else:
+                nNonUniq += 1
                 newId = f'{seqGroupPrefix}{nNonUniq:0>3}'
                 newDesc = (
                     f'{t.description}|{rec.description}'
